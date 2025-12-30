@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import EventKit
 
 class TimerManager: ObservableObject {
     @Published var completedBlocks: Int = 0
@@ -26,7 +27,9 @@ class TimerManager: ObservableObject {
     var onShowPopover: (() -> Void)?
     private var timer: Timer?
     private var reminderTimer: Timer?
-    private let defaults = UserDefaults(suiteName: "com.focusblocks.app") ?? UserDefaults.standard
+    private let defaults = UserDefaults.standard
+    private let eventStore = EKEventStore()
+    private var blockStartTime: Date?
 
     let activities = [
         "🚶 Procházka",
@@ -94,6 +97,7 @@ class TimerManager: ObservableObject {
         isRunning = true
         isOnBreak = false
         remainingTime = blockDuration
+        blockStartTime = Date()
 
         enableFocusMode(true)
         startRescueTimeFocus()
@@ -125,19 +129,21 @@ class TimerManager: ObservableObject {
     func completeBlock() {
         isRunning = false
         completedBlocks += 1
-        completedBlockTimes.append(Date())
+        let endTime = Date()
+        completedBlockTimes.append(endTime)
         timer?.invalidate()
 
         enableFocusMode(false)
         endRescueTimeFocus()
-        
+        addCalendarEvent(blockNumber: completedBlocks, startTime: blockStartTime, endTime: endTime)
+
         if completedBlocks >= maxBlocks {
             playSound()
             onShowPopover?()
         } else {
             startBreak()
         }
-        
+
         saveState()
         onUpdate?()
     }
@@ -257,11 +263,43 @@ class TimerManager: ObservableObject {
     }
     
     // MARK: - Sound
-    
+
     func playSound() {
         NSSound(named: "Glass")?.play()
     }
-    
+
+    // MARK: - Calendar
+
+    func addCalendarEvent(blockNumber: Int, startTime: Date?, endTime: Date) {
+        guard let start = startTime else { return }
+
+        if #available(macOS 14.0, *) {
+            eventStore.requestFullAccessToEvents { [weak self] granted, error in
+                guard granted, error == nil else { return }
+                self?.createEvent(blockNumber: blockNumber, start: start, end: endTime)
+            }
+        } else {
+            eventStore.requestAccess(to: .event) { [weak self] granted, error in
+                guard granted, error == nil else { return }
+                self?.createEvent(blockNumber: blockNumber, start: start, end: endTime)
+            }
+        }
+    }
+
+    private func createEvent(blockNumber: Int, start: Date, end: Date) {
+        let event = EKEvent(eventStore: eventStore)
+        event.title = "Focus Block \(blockNumber)"
+        event.startDate = start
+        event.endDate = end
+        event.calendar = eventStore.defaultCalendarForNewEvents
+
+        do {
+            try eventStore.save(event, span: .thisEvent)
+        } catch {
+            print("Failed to save calendar event: \(error)")
+        }
+    }
+
     // MARK: - Persistence
     
     func saveState() {
