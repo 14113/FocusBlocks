@@ -271,17 +271,31 @@ class TimerManager: ObservableObject {
     // MARK: - Calendar
 
     func addCalendarEvent(blockNumber: Int, startTime: Date?, endTime: Date) {
-        guard let start = startTime else { return }
+        guard let start = startTime else {
+            print("Calendar: No start time")
+            return
+        }
+
+        print("Calendar: Requesting access... macOS version check")
+
+        let status = EKEventStore.authorizationStatus(for: .event)
+        print("Calendar: Current status = \(status.rawValue)")
 
         if #available(macOS 14.0, *) {
+            print("Calendar: Using macOS 14+ API")
             eventStore.requestFullAccessToEvents { [weak self] granted, error in
-                guard granted, error == nil else { return }
-                self?.createEvent(blockNumber: blockNumber, start: start, end: endTime)
+                print("Calendar: Full access granted = \(granted), error = \(String(describing: error))")
+                if granted {
+                    self?.createEvent(blockNumber: blockNumber, start: start, end: endTime)
+                }
             }
         } else {
+            print("Calendar: Using legacy API")
             eventStore.requestAccess(to: .event) { [weak self] granted, error in
-                guard granted, error == nil else { return }
-                self?.createEvent(blockNumber: blockNumber, start: start, end: endTime)
+                print("Calendar: Access granted = \(granted), error = \(String(describing: error))")
+                if granted {
+                    self?.createEvent(blockNumber: blockNumber, start: start, end: endTime)
+                }
             }
         }
     }
