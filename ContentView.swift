@@ -10,24 +10,24 @@ struct ContentView: View {
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     @State private var hoveredBlockIndex: Int? = nil
 
-    private var focusMinutes: Binding<Double> {
+    private var focusMinutesInt: Binding<Int> {
         Binding(
-            get: { Double(timerManager.focusDurationMinutes) },
-            set: { timerManager.saveFocusDuration(Int($0)) }
+            get: { timerManager.focusDurationMinutes },
+            set: { timerManager.saveFocusDuration(max(1, min(60, $0))) }
         )
     }
 
-    private var breakMinutes: Binding<Double> {
+    private var breakMinutesInt: Binding<Int> {
         Binding(
-            get: { Double(timerManager.breakDurationMinutes) },
-            set: { timerManager.saveBreakDuration(Int($0)) }
+            get: { timerManager.breakDurationMinutes },
+            set: { timerManager.saveBreakDuration(max(1, min(30, $0))) }
         )
     }
 
-    private var reminderMinutes: Binding<Double> {
+    private var reminderMinutesInt: Binding<Int> {
         Binding(
-            get: { Double(timerManager.reminderMinutes) },
-            set: { timerManager.saveReminderDuration(Int($0)) }
+            get: { timerManager.reminderMinutes },
+            set: { timerManager.saveReminderDuration(max(1, min(60, $0))) }
         )
     }
 
@@ -35,6 +35,13 @@ struct ContentView: View {
         Binding(
             get: { timerManager.rescueTimeApiKey },
             set: { timerManager.saveApiKey($0) }
+        )
+    }
+
+    private var maxBlocksInt: Binding<Int> {
+        Binding(
+            get: { timerManager.maxBlocks },
+            set: { timerManager.saveMaxBlocks(max(1, min(15, $0))) }
         )
     }
 
@@ -47,60 +54,65 @@ struct ContentView: View {
                         shuffledActivities = timerManager.activities.shuffled()
                     }
                 }
-            VStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    ForEach(0..<timerManager.maxBlocks, id: \.self) { index in
-                        ZStack {
-                            if index == timerManager.completedBlocks && timerManager.isRunning {
-                                // Active block - focus indicator
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color.orange, Color.orange.opacity(0.8)],
-                                            startPoint: .top,
-                                            endPoint: .bottom
+            ZStack(alignment: .bottom) {
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        ForEach(0..<timerManager.maxBlocks, id: \.self) { index in
+                            ZStack {
+                                if index == timerManager.completedBlocks && timerManager.isRunning {
+                                    // Active block - focus indicator
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [Color.orange, Color.orange.opacity(0.8)],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
                                         )
-                                    )
-                                    .frame(width: 26, height: 26)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.orange.opacity(0.6), lineWidth: 2)
-                                    )
-                                    .shadow(color: Color.orange.opacity(0.5), radius: 4, x: 0, y: 2)
+                                        .frame(width: 26, height: 26)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.orange.opacity(0.6), lineWidth: 2)
+                                        )
+                                        .shadow(color: Color.orange.opacity(0.5), radius: 4, x: 0, y: 2)
 
-                                Image(systemName: "flame.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.white)
-                            } else {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(blockColor(for: index))
-                                    .frame(width: 26, height: 26)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(index < timerManager.completedBlocks ? Color.green.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 1)
-                                    )
-                                    .shadow(color: index < timerManager.completedBlocks ? Color.green.opacity(0.3) : Color.clear, radius: 2, x: 0, y: 1)
-
-                                if index < timerManager.completedBlocks {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 12, weight: .bold))
+                                    Image(systemName: "flame.fill")
+                                        .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.white)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(blockColor(for: index))
+                                        .frame(width: 26, height: 26)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(index < timerManager.completedBlocks ? Color.green.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                        .shadow(color: index < timerManager.completedBlocks ? Color.green.opacity(0.3) : Color.clear, radius: 2, x: 0, y: 1)
+
+                                    if index < timerManager.completedBlocks {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
                                 }
                             }
-                        }
-                        .onHover { isHovered in
-                            hoveredBlockIndex = isHovered ? index : nil
+                            .onHover { isHovered in
+                                hoveredBlockIndex = isHovered ? index : nil
+                            }
                         }
                     }
+                    .frame(width: 300)
+
+                    Spacer().frame(height: 16)
                 }
 
-                if let index = hoveredBlockIndex {
-                    Text(blockTooltip(for: index))
+                if hoveredBlockIndex != nil {
+                    Text(blockTooltip(for: hoveredBlockIndex!))
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .transition(.opacity)
                 }
             }
+            .frame(width: 300, height: 50)
             
             
             // Timer display
@@ -182,6 +194,40 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.green.opacity(0.1))
                     .cornerRadius(12)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Dokončené bloky:")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+
+                        HStack(alignment: .top, spacing: 16) {
+                            let times = timerManager.completedBlockTimes
+                            let half = (times.count + 1) / 2
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(0..<half, id: \.self) { index in
+                                    Text("Blok \(index + 1): \(formatBlockTime(times[index]))")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            if times.count > half {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    ForEach(half..<times.count, id: \.self) { index in
+                                        Text("Blok \(index + 1): \(formatBlockTime(times[index]))")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(12)
                 }
             }
 
@@ -242,26 +288,53 @@ struct ContentView: View {
             .buttonStyle(.plain)
 
             if settingsExpanded {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Focus duration
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Focus: \(timerManager.focusDurationMinutes) min")
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Focus:")
                             .font(.caption)
-                        Slider(value: focusMinutes, in: 1...60, step: 1)
+                        Spacer()
+                        TextField("", value: focusMinutesInt, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 50)
+                        Text("min")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
 
-                    // Break duration
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Pauza: \(timerManager.breakDurationMinutes) min")
+                    HStack {
+                        Text("Pauza:")
                             .font(.caption)
-                        Slider(value: breakMinutes, in: 1...15, step: 1)
+                        Spacer()
+                        TextField("", value: breakMinutesInt, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 50)
+                        Text("min")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
 
-                    // Reminder duration
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Připomenutí: \(timerManager.reminderMinutes) min")
+                    HStack {
+                        Text("Připomenutí:")
                             .font(.caption)
-                        Slider(value: reminderMinutes, in: 1...30, step: 1)
+                        Spacer()
+                        TextField("", value: reminderMinutesInt, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 50)
+                        Text("min")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Text("Počet bloků:")
+                            .font(.caption)
+                        Spacer()
+                        TextField("", value: maxBlocksInt, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 50)
+                        Text("min")
+                            .font(.caption)
+                            .foregroundColor(.clear)
                     }
 
                     Divider()
@@ -338,6 +411,12 @@ struct ContentView: View {
         } else {
             return "Blok \(index + 1)"
         }
+    }
+
+    func formatBlockTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
 
     func formatTime(_ time: TimeInterval) -> String {

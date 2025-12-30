@@ -12,8 +12,7 @@ class TimerManager: ObservableObject {
     @Published var focusDurationMinutes: Int = 30
     @Published var breakDurationMinutes: Int = 5
     @Published var reminderMinutes: Int = 15
-
-    let maxBlocks = 10
+    @Published var maxBlocks: Int = 10
 
     var blockDuration: TimeInterval {
         TimeInterval(focusDurationMinutes * 60)
@@ -58,9 +57,17 @@ class TimerManager: ObservableObject {
         let savedFocus = defaults.integer(forKey: "focusDurationMinutes")
         let savedBreak = defaults.integer(forKey: "breakDurationMinutes")
         let savedReminder = defaults.integer(forKey: "reminderMinutes")
+        let savedMaxBlocks = defaults.integer(forKey: "maxBlocks")
         focusDurationMinutes = savedFocus > 0 ? savedFocus : 30
         breakDurationMinutes = savedBreak > 0 ? savedBreak : 5
         reminderMinutes = savedReminder > 0 ? savedReminder : 15
+        maxBlocks = savedMaxBlocks > 0 ? savedMaxBlocks : 10
+    }
+
+    func saveMaxBlocks(_ count: Int) {
+        maxBlocks = count
+        defaults.set(count, forKey: "maxBlocks")
+        onUpdate?()
     }
 
     func saveFocusDuration(_ minutes: Int) {
