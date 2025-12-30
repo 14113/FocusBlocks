@@ -206,16 +206,7 @@ class TimerManager: ObservableObject {
     // MARK: - Focus Mode
     
     func enableFocusMode(_ enable: Bool) {
-        let script: String
         if enable {
-            script = """
-            tell application "System Events"
-                tell application process "ControlCenter"
-                    -- Enable Focus Mode via AppleScript/Shortcuts
-                end tell
-            end tell
-            """
-            // Alternative: use shortcuts
             let task = Process()
             task.launchPath = "/usr/bin/shortcuts"
             task.arguments = ["run", "Start Focus"]

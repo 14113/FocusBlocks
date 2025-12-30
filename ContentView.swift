@@ -41,7 +41,7 @@ struct ContentView: View {
     private var maxBlocksInt: Binding<Int> {
         Binding(
             get: { timerManager.maxBlocks },
-            set: { timerManager.saveMaxBlocks(max(1, min(15, $0))) }
+            set: { timerManager.saveMaxBlocks(max(1, min(10, $0))) }
         )
     }
 
