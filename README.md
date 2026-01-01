@@ -1,88 +1,182 @@
 # FocusBlocks
 
-Minimalistická menu bar appka pro focus bloky.
+Minimalistická macOS menu bar aplikace pro správu focus bloků pomocí Pomodoro techniky. Pomáhá udržet produktivitu a zabránit vyhoření díky strukturovaným pracovním blokům a pravidelným pauzám.
+
+## Screenshoty
+
+| Úvodní obrazovka | Focus blok | Pauza s aktivitami |
+|:---:|:---:|:---:|
+| ![Start](images/1.png) | ![Focus](images/2.png) | ![Pauza](images/3.png) |
+
+## K čemu aplikace slouží
+
+FocusBlocks je navržen pro lidi, kteří chtějí:
+- Pracovat v soustředěných blocích bez rozptylování
+- Mít jasný přehled o tom, kolik práce už dnes odvedli
+- Dostávat připomínky na pravidelné pauzy
+- Vědět, kdy je čas skončit s prací
 
 ## Funkce
 
-- 10 bloků × 30 minut
-- 5 min pauza mezi bloky s návrhy aktivit
-- Vizuální počítadlo v menu baru
-- Focus Mode integrace (přes Shortcuts)
-- **RescueTime integrace** - automaticky startuje/ukončuje FocusTime session
-- Po 10. bloku: jasný signál "DOST"
-- Automatický reset každý den
+### Základní funkce
+- **10 focus bloků** po 30 minutách denně (konfigurovatelné)
+- **5 minutové pauzy** mezi bloky s návrhy aktivit
+- **Vizuální počítadlo** v menu baru (např. "3/10")
+- **Časovač** zobrazený přímo v menu baru během focus bloku
+- **Automatický reset** o půlnoci - každý den začínáš čistě
+- **Připomínky** pokud zapomeneš začít další blok
+
+### Integrace
+- **Focus Mode** - automaticky zapíná/vypíná režim Nerušit přes Shortcuts
+- **RescueTime** - automaticky spouští FocusTime session pro sledování produktivity
+- **Kalendář** - zaznamenává dokončené bloky do kalendáře
+
+### Vizuální prvky
+- Barevné čtverečky ukazující průběh dne (zelená = hotovo, modrá = probíhá, šedá = zbývá)
+- Přehled časů dokončených bloků
+- Návrhy relaxačních aktivit během pauzy
 
 ## Instalace
 
 ### 1. Vytvoř Shortcuts pro Focus Mode
 
-V aplikaci **Shortcuts** vytvoř dva shortcuts:
+V aplikaci **Shortcuts** (Zkratky) vytvoř dva shortcuts:
 
-**"Start Focus":**
-- Add action: "Set Focus"
-- Focus: "Do Not Disturb" (nebo vlastní Focus profil)
-- Turn: On
+#### Shortcut "Start Focus"
 
-**"Stop Focus":**
-- Add action: "Set Focus"
-- Focus: "Do Not Disturb"
-- Turn: Off
+1. Otevři aplikaci **Shortcuts** (Zkratky)
+2. Klikni na **+** pro vytvoření nové zkratky
+3. Pojmenuj ji přesně **"Start Focus"**
+4. Klikni na **Add Action** (Přidat akci)
+5. Vyhledej **"Set Focus"** (Nastavit soustředění)
+6. Vyber akci **Set Focus**
+7. V akci nastav:
+   - Focus: **Do Not Disturb** (Nerušit) nebo vlastní Focus profil
+   - Turn: **On** (Zapnout)
+8. Ulož zkratku
+
+```
+┌─────────────────────────────────┐
+│  Start Focus                    │
+├─────────────────────────────────┤
+│  Set Focus                      │
+│  ┌───────────────────────────┐  │
+│  │ Turn [Do Not Disturb] On  │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+#### Shortcut "Stop Focus"
+
+1. Vytvoř novou zkratku
+2. Pojmenuj ji přesně **"Stop Focus"**
+3. Přidej akci **Set Focus**
+4. V akci nastav:
+   - Focus: **Do Not Disturb** (Nerušit)
+   - Turn: **Off** (Vypnout)
+5. Ulož zkratku
+
+```
+┌─────────────────────────────────┐
+│  Stop Focus                     │
+├─────────────────────────────────┤
+│  Set Focus                      │
+│  ┌───────────────────────────┐  │
+│  │ Turn [Do Not Disturb] Off │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+#### Vlastní Focus profil (volitelné)
+
+Můžeš si vytvořit vlastní Focus profil pro práci:
+
+1. Otevři **System Settings** → **Focus**
+2. Klikni na **+** a vyber **Custom**
+3. Pojmenuj ho např. "Deep Work"
+4. Nastav:
+   - Allowed Notifications: None (nebo vybrané kontakty)
+   - Allowed Apps: None (nebo vybrané aplikace)
+   - Focus Filters: Skryj nepotřebné aplikace
+5. V Shortcuts pak vyber tento profil místo "Do Not Disturb"
 
 ### 2. RescueTime API Key (volitelné)
 
 1. Jdi na https://www.rescuetime.com/anapi/manage
 2. Vygeneruj nový API key
-3. Vlož ho do nastavení v appce
+3. Vlož ho do nastavení v aplikaci
 
-### 3. Build appky
+### 3. Build aplikace
 
-Otevři Xcode projekt:
 ```bash
 cd FocusBlocks
 open FocusBlocks.xcodeproj
 ```
 
 V Xcode:
-1. Cmd+B pro build
-2. Product → Archive pro release verzi
-3. Nebo prostě Cmd+R pro spuštění
+1. `Cmd+B` pro build
+2. `Cmd+R` pro spuštění
+3. Product → Archive pro release verzi
 
-**Poznámka:** Swift Package Manager build (`swift build`) nefunguje kvůli UserNotifications - vyžaduje proper app bundle.
+### 4. Trvalá instalace
 
-### 4. Spuštění
-
-Po buildu v Xcode se appka spustí automaticky. Pro ruční spuštění:
-
-1. Najdi `FocusBlocks.app` v `~/Library/Developer/Xcode/DerivedData/FocusBlocks-*/Build/Products/Debug/`
+1. Najdi `FocusBlocks.app` v build složce
 2. Přesuň do `/Applications`
-3. Přidej do Login Items (System Settings → General → Login Items)
+3. Přidej do Login Items (System Settings → General → Login Items) pro automatické spouštění
 
 ## Použití
 
-1. Klikni na ikonu v menu baru
-2. Klikni "Start" pro začátek bloku
-3. Po 30 minutách dostaneš notifikaci a začne 5min pauza
-4. Po pauze můžeš začít další blok
-5. Po 10. bloku: zavři notebook
+1. **Klikni na ikonu** v menu baru pro otevření okna
+2. **Start** - začne 30minutový focus blok
+3. Po skončení bloku uslyšíš zvuk a zobrazí se návrh aktivity pro pauzu
+4. Po 5minutové pauze můžeš začít další blok
+5. **Po 10. bloku** se zobrazí "DOST" - čas zavřít notebook!
 
-## Konfigurace
+### Menu bar indikátory
 
-V `TimerManager.swift` můžeš upravit:
+| Stav | Zobrazení |
+|------|-----------|
+| Focus blok | `25:43 (3/10)` |
+| Pauza | `04:12 (3/10)` |
+| Čekání | `3/10` |
+| Hotovo | `DOST` |
 
-```swift
-let maxBlocks = 10           // max bloků za den
-let blockDuration = 30 * 60  // délka bloku (v sekundách)
-let breakDuration = 5 * 60   // délka pauzy (v sekundách)
+## Nastavení
 
-let activities = [           // seznam aktivit pro pauzy
-    "🚶 Procházka",
-    "📖 Čtení knihy",
-    // ...
-]
-```
+V aplikaci lze nastavit:
+- **Počet bloků** - kolik bloků chceš za den (výchozí: 10)
+- **Délka bloku** - délka focus bloku v minutách (výchozí: 30)
+- **Délka pauzy** - délka pauzy v minutách (výchozí: 5)
+- **Připomínka** - za kolik minut připomenout další blok (výchozí: 15)
+- **RescueTime API** - klíč pro integraci s RescueTime
 
-## Poznámky
+## Aktivity pro pauzy
 
-- Appka si pamatuje stav přes UserDefaults
-- Počítadlo se resetuje každý den automaticky
-- Focus Mode se ovládá přes Shortcuts (musíš je vytvořit ručně)
+Během pauzy aplikace náhodně navrhne jednu z těchto aktivit:
+- Procházka
+- Čtení knihy
+- Skládání Lega
+- Kontaktování přátel
+- Yoga
+- Dýchací cvičení
+- Práce na zahradě
+
+## Technické detaily
+
+- **Platforma:** macOS 13.0+
+- **Framework:** SwiftUI + AppKit
+- **Ukládání dat:** UserDefaults
+- **Kalendář:** EventKit
+- Aplikace běží jako menu bar app (bez ikony v Docku)
+
+## Oprávnění
+
+Aplikace vyžaduje:
+- **Kalendář** - pro záznam dokončených bloků
+- **Shortcuts** - pro ovládání Focus Mode
+
+## Tipy
+
+- Nastav si vlastní Focus profil v System Settings pro lepší kontrolu nad notifikacemi
+- Používej RescueTime pro sledování, jak efektivně trávíš čas během bloků
+- Respektuj "DOST" signál - je důležité vědět, kdy přestat
