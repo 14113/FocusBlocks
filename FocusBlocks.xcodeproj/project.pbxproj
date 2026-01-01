@@ -10,6 +10,7 @@
 		A1000001 /* FocusBlocksApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* FocusBlocksApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* TimerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* TimerManager.swift */; };
+		A1000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000004 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +19,7 @@
 		A2000001 /* FocusBlocksApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusBlocksApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2000003 /* TimerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerManager.swift; sourceTree = "<group>"; };
+		A2000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "FocusBlocks/Assets.xcassets"; sourceTree = "<group>"; };
 		A3000001 /* FocusBlocks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FocusBlocks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -30,6 +32,7 @@
 				A2000001 /* FocusBlocksApp.swift */,
 				A2000002 /* ContentView.swift */,
 				A2000003 /* TimerManager.swift */,
+				A2000004 /* Assets.xcassets */,
 				A4000002 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -50,6 +53,7 @@
 			buildConfigurationList = A7000001 /* Build configuration list for PBXNativeTarget "FocusBlocks" */;
 			buildPhases = (
 				A6000001 /* Sources */,
+				A6000002 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -87,6 +91,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A6000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000004 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A6000001 /* Sources */ = {

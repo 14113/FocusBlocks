@@ -27,6 +27,7 @@ class TimerManager: ObservableObject {
     var onShowPopover: (() -> Void)?
     private var timer: Timer?
     private var reminderTimer: Timer?
+    private var midnightTimer: Timer?
     private let defaults = UserDefaults.standard
     private let eventStore = EKEventStore()
     private var blockStartTime: Date?
@@ -45,6 +46,7 @@ class TimerManager: ObservableObject {
         loadState()
         loadApiKey()
         loadDurations()
+        scheduleMidnightReset()
     }
 
     func loadApiKey() {
@@ -314,8 +316,31 @@ class TimerManager: ObservableObject {
         }
     }
 
+    // MARK: - Midnight Reset
+
+    func scheduleMidnightReset() {
+        midnightTimer?.invalidate()
+
+        let calendar = Calendar.current
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()),
+              let midnight = calendar.date(bySettingHour: 0, minute: 0, second: 0, of: tomorrow) else {
+            return
+        }
+
+        let timeUntilMidnight = midnight.timeIntervalSinceNow
+
+        midnightTimer = Timer.scheduledTimer(withTimeInterval: timeUntilMidnight, repeats: false) { [weak self] _ in
+            self?.performMidnightReset()
+        }
+    }
+
+    private func performMidnightReset() {
+        resetDay()
+        scheduleMidnightReset()
+    }
+
     // MARK: - Persistence
-    
+
     func saveState() {
         let today = Calendar.current.startOfDay(for: Date())
         defaults.set(completedBlocks, forKey: "completedBlocks")
