@@ -2,7 +2,7 @@
 
 Minimalistická macOS menu bar aplikace pro správu focus bloků pomocí Pomodoro techniky. Pomáhá udržet produktivitu a zabránit vyhoření díky strukturovaným pracovním blokům a pravidelným pauzám.
 
-**[⬇️ Stáhnout poslední verzi (FocusBlocks5.app)](builds/FocusBlocks.app)**
+**[⬇️ Stáhnout poslední verzi (ZIP)](builds/FocusBlocks.zip?raw=true)**
 
 ## Screenshoty
 
