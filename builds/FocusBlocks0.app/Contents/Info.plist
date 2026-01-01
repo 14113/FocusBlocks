@@ -8,10 +8,6 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>FocusBlocks</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.focusblocks.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -48,7 +44,5 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>NSCalendarsUsageDescription</key>
-	<string>FocusBlocks potřebuje přístup ke kalendáři pro záznam dokončených bloků.</string>
 </dict>
 </plist>
