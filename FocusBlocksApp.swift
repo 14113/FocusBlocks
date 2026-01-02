@@ -104,9 +104,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else if blocks >= max {
                 button.title = "✅ DOST"
             } else {
-                button.title = "◻️ \(blocks)/\(max)"
+                button.attributedTitle = standbyTitle(blocks: blocks, max: max)
             }
         }
+    }
+
+    func standbyTitle(blocks: Int, max: Int) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+
+        // SF Symbol pro čtverec s baseline offsetem
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
+        if let image = NSImage(systemSymbolName: "square", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
+            let attachment = NSTextAttachment()
+            attachment.image = image
+            attachment.bounds = CGRect(x: 0, y: -2, width: 12, height: 12)
+            result.append(NSAttributedString(attachment: attachment))
+        }
+
+        result.append(NSAttributedString(string: " \(blocks)/\(max)"))
+        return result
     }
 
     func attributedMenuTitle(_ text: String, monoRange: String) -> NSAttributedString {
