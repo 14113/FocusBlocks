@@ -223,6 +223,13 @@ struct ContentView: View {
                                 }
                             }
                         }
+
+                        Divider()
+
+                        Text("Celkový čas: \(formatTotalTime())")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -361,6 +368,12 @@ struct ContentView: View {
                     TextField("API Key", text: apiKey)
                         .textFieldStyle(.roundedBorder)
                         .font(.caption)
+
+                    Toggle("Otevřít RescueTime dashboard po dokončení bloku", isOn: Binding(
+                        get: { timerManager.openRescueTimeOnComplete },
+                        set: { timerManager.saveOpenRescueTimeOnComplete($0) }
+                    ))
+                    .font(.caption)
                     Divider()
 
                     HStack {
@@ -423,5 +436,16 @@ struct ContentView: View {
         let mins = Int(time) / 60
         let secs = Int(time) % 60
         return String(format: "%02d:%02d", mins, secs)
+    }
+
+    func formatTotalTime() -> String {
+        let totalMinutes = timerManager.completedBlocks * timerManager.focusDurationMinutes
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)min"
+        } else {
+            return "\(minutes)min"
+        }
     }
 }

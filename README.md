@@ -150,7 +150,9 @@ V aplikaci lze nastavit:
 - **Délka bloku** - délka focus bloku v minutách (výchozí: 30)
 - **Délka pauzy** - délka pauzy v minutách (výchozí: 5)
 - **Připomínka** - za kolik minut připomenout další blok (výchozí: 15)
+- **Spustit při startu** - automaticky spustí aplikaci po přihlášení
 - **RescueTime API** - klíč pro integraci s RescueTime
+- **Otevřít RescueTime po bloku** - automaticky otevře RescueTime dashboard v prohlížeči po dokončení každého bloku (výchozí: zapnuto)
 
 ## Aktivity pro pauzy
 

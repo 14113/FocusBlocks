@@ -10,6 +10,7 @@ class TimerManager: ObservableObject {
     @Published var remainingTime: TimeInterval = 0
     @Published var breakRemaining: TimeInterval = 0
     @Published var rescueTimeApiKey: String = ""
+    @Published var openRescueTimeOnComplete: Bool = true
     @Published var focusDurationMinutes: Int = 30
     @Published var breakDurationMinutes: Int = 5
     @Published var reminderMinutes: Int = 15
@@ -67,6 +68,17 @@ class TimerManager: ObservableObject {
         breakDurationMinutes = savedBreak > 0 ? savedBreak : 5
         reminderMinutes = savedReminder > 0 ? savedReminder : 15
         maxBlocks = savedMaxBlocks > 0 ? savedMaxBlocks : 10
+
+        if defaults.object(forKey: "openRescueTimeOnComplete") != nil {
+            openRescueTimeOnComplete = defaults.bool(forKey: "openRescueTimeOnComplete")
+        } else {
+            openRescueTimeOnComplete = true
+        }
+    }
+
+    func saveOpenRescueTimeOnComplete(_ value: Bool) {
+        openRescueTimeOnComplete = value
+        defaults.set(value, forKey: "openRescueTimeOnComplete")
     }
 
     func saveMaxBlocks(_ count: Int) {
@@ -138,6 +150,9 @@ class TimerManager: ObservableObject {
         enableFocusMode(false)
         endRescueTimeFocus()
         addCalendarEvent(blockNumber: completedBlocks, startTime: blockStartTime, endTime: endTime)
+        if openRescueTimeOnComplete {
+            openRescueTimeDashboard()
+        }
 
         if completedBlocks >= maxBlocks {
             playSound()
@@ -268,6 +283,14 @@ class TimerManager: ObservableObject {
 
     func playSound() {
         NSSound(named: "Glass")?.play()
+    }
+
+    // MARK: - Open RescueTime Dashboard
+
+    func openRescueTimeDashboard() {
+        if let url = URL(string: "https://www.rescuetime.com/dashboard") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     // MARK: - Calendar
