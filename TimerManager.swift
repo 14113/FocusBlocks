@@ -48,6 +48,29 @@ class TimerManager: ObservableObject {
         loadApiKey()
         loadDurations()
         scheduleMidnightReset()
+        setupWakeObserver()
+    }
+
+    private func setupWakeObserver() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.checkForNewDay()
+        }
+    }
+
+    private func checkForNewDay() {
+        let today = Calendar.current.startOfDay(for: Date())
+        let lastDate = Date(timeIntervalSince1970: defaults.double(forKey: "lastDate"))
+
+        if !Calendar.current.isDate(today, inSameDayAs: lastDate) {
+            resetDay()
+        }
+
+        // Reschedule midnight timer in case it was missed
+        scheduleMidnightReset()
     }
 
     func loadApiKey() {
