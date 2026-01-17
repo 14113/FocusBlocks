@@ -216,7 +216,7 @@ class TimerManager: ObservableObject {
 
         reminderTimer?.invalidate()
         let reminderInterval = TimeInterval(reminderMinutes * 60)
-        reminderTimer = Timer.scheduledTimer(withTimeInterval: reminderInterval, repeats: false) { [weak self] _ in
+        reminderTimer = Timer.scheduledTimer(withTimeInterval: reminderInterval, repeats: true) { [weak self] _ in
             self?.showReminder()
         }
     }
