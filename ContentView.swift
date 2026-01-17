@@ -401,6 +401,7 @@ struct ContentView: View {
         .padding(20)
         .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)
+        .background(.thinMaterial)
     }
     
     func blockColor(for index: Int) -> Color {

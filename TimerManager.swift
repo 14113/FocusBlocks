@@ -143,11 +143,12 @@ class TimerManager: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.tick()
         }
-        
+        RunLoop.main.add(timer!, forMode: .common)
+
         saveState()
         onUpdate?()
     }
-    
+
     func tick() {
         if isRunning {
             remainingTime -= 1
@@ -191,13 +192,15 @@ class TimerManager: ObservableObject {
     func startBreak() {
         isOnBreak = true
         breakRemaining = breakDuration
-        
+
         playSound()
         onShowPopover?()
-        
+
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        RunLoop.main.add(timer!, forMode: .common)
     }
     
     func endBreak() {
@@ -219,6 +222,7 @@ class TimerManager: ObservableObject {
         reminderTimer = Timer.scheduledTimer(withTimeInterval: reminderInterval, repeats: true) { [weak self] _ in
             self?.showReminder()
         }
+        RunLoop.main.add(reminderTimer!, forMode: .common)
     }
 
     func showReminder() {
@@ -378,6 +382,7 @@ class TimerManager: ObservableObject {
         midnightTimer = Timer.scheduledTimer(withTimeInterval: timeUntilMidnight, repeats: false) { [weak self] _ in
             self?.performMidnightReset()
         }
+        RunLoop.main.add(midnightTimer!, forMode: .common)
     }
 
     private func performMidnightReset() {
