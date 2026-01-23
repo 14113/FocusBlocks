@@ -574,9 +574,9 @@ class TimerManager: ObservableObject {
                 RunLoop.main.add(timer!, forMode: .common)
                 onUpdate?()
             } else {
-                // Timer expiroval - dokončit blok
+                // Timer expiroval - dokončit blok bezpečně (bez dalších akcí)
                 print("⏱ Timer expiroval během vypnutí appky - dokončuji blok")
-                completeBlock()
+                completeExpiredBlock()
             }
         } else if timerIsOnBreak, let breakStartInterval = defaults.object(forKey: "syncTimerBreakStartTime") as? TimeInterval {
             let breakStart = Date(timeIntervalSince1970: breakStartInterval)
@@ -597,10 +597,75 @@ class TimerManager: ObservableObject {
                 RunLoop.main.add(timer!, forMode: .common)
                 onUpdate?()
             } else {
-                // Pauza expirovala - ukončit ji
+                // Pauza expirovala - ukončit ji bezpečně
                 print("⏸ Pauza expirovala během vypnutí appky - ukončuji")
-                endBreak()
+                completeExpiredBreak()
             }
         }
+    }
+
+    private func completeExpiredBlock() {
+        // Bezpečně dokončit expirovaný blok bez otevírání popoverů a zvuků
+        isRunning = false
+        completedBlocks += 1
+        let endTime = Date()
+        completedBlockTimes.append(endTime)
+
+        enableFocusMode(false)
+
+        // Přidat do kalendáře (pokud máme startTime)
+        if let startTime = blockStartTime {
+            addCalendarEvent(blockNumber: completedBlocks, startTime: startTime, endTime: endTime)
+        }
+
+        if completedBlocks >= maxBlocks {
+            // Všechny bloky dokončeny - vymazat timer state
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+        } else {
+            // Zkontrolovat, jestli už neuplynula i pauza
+            let expectedBreakEnd = endTime.addingTimeInterval(breakDuration)
+            if Date() > expectedBreakEnd {
+                // Pauza už také uplynula - vymazat timer state a spustit reminder
+                print("⏸ Pauza také expirovala během vypnutí appky")
+                saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+                startReminderTimer()
+            } else {
+                // Pauza ještě běží nebo právě končí - spustit pauzu s vypočítaným časem
+                let breakElapsed = Date().timeIntervalSince(endTime)
+                let breakRemaining = breakDuration - breakElapsed
+
+                if breakRemaining > 0 {
+                    print("🔄 Spouštím zbývající pauzu (\(Int(breakRemaining))s)")
+                    isOnBreak = true
+                    self.breakRemaining = breakRemaining
+
+                    timer?.invalidate()
+                    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                        self?.tick()
+                    }
+                    RunLoop.main.add(timer!, forMode: .common)
+
+                    saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: endTime)
+                } else {
+                    // Pauza právě skončila
+                    saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+                    startReminderTimer()
+                }
+            }
+        }
+
+        saveState()
+        onUpdate?()
+    }
+
+    private func completeExpiredBreak() {
+        // Bezpečně ukončit expirovanou pauzu
+        isOnBreak = false
+
+        // Vymazat timer state
+        saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+
+        onUpdate?()
+        startReminderTimer()
     }
 }
