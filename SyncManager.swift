@@ -14,6 +14,7 @@ class SyncManager: ObservableObject {
     private let fileManager = FileManager.default
     private var fileMonitor: DispatchSourceFileSystemObject?
     private let syncQueue = DispatchQueue(label: "com.focusblocks.sync", qos: .utility)
+    private var periodicSyncTimer: Timer?
 
     // Unikátní ID tohoto zařízení
     private var deviceId: String {
@@ -42,6 +43,7 @@ class SyncManager: ObservableObject {
             var completedBlockTimes: [TimeInterval]
             var lastDate: TimeInterval
             var settings: Settings
+            var timerState: TimerState?
 
             struct Settings: Codable {
                 var focusDurationMinutes: Int
@@ -50,6 +52,15 @@ class SyncManager: ObservableObject {
                 var maxBlocks: Int
                 var openRescueTimeOnComplete: Bool
                 var rescueTimeApiKey: String?
+            }
+
+            struct TimerState: Codable {
+                var isRunning: Bool
+                var isOnBreak: Bool
+                var blockStartTime: TimeInterval?
+                var breakStartTime: TimeInterval?
+                var sourceDeviceId: String
+                var stateUpdatedAt: TimeInterval
             }
         }
     }
@@ -75,12 +86,16 @@ class SyncManager: ObservableObject {
 
         // Spustit sledování změn
         startMonitoring()
+
+        // Spustit periodickou synchronizaci pro real-time timer
+        startPeriodicSync()
     }
 
     func disableSync() {
         isSyncEnabled = false
         syncFolderPath = nil
         stopMonitoring()
+        stopPeriodicSync()
         saveSyncSettings()
     }
 
@@ -95,6 +110,7 @@ class SyncManager: ObservableObject {
 
         if isSyncEnabled, syncFolderPath != nil {
             startMonitoring()
+            startPeriodicSync()
         }
     }
 
@@ -195,10 +211,35 @@ class SyncManager: ObservableObject {
             rescueTimeApiKey: defaults.string(forKey: "rescueTimeApiKey")
         )
 
+        // Načíst timer state
+        let timerState = collectTimerState()
+
         return SyncData.FocusBlocksData(
             completedBlockTimes: completedBlockTimes,
             lastDate: lastDate,
-            settings: settings
+            settings: settings,
+            timerState: timerState
+        )
+    }
+
+    private func collectTimerState() -> SyncData.FocusBlocksData.TimerState? {
+        let isRunning = defaults.bool(forKey: "syncTimerIsRunning")
+        let isOnBreak = defaults.bool(forKey: "syncTimerIsOnBreak")
+
+        // Pokud timer neběží, nevracet state
+        guard isRunning || isOnBreak else { return nil }
+
+        let blockStartTime = defaults.object(forKey: "syncTimerBlockStartTime") as? TimeInterval
+        let breakStartTime = defaults.object(forKey: "syncTimerBreakStartTime") as? TimeInterval
+        let stateUpdatedAt = defaults.double(forKey: "syncTimerStateUpdatedAt")
+
+        return SyncData.FocusBlocksData.TimerState(
+            isRunning: isRunning,
+            isOnBreak: isOnBreak,
+            blockStartTime: blockStartTime,
+            breakStartTime: breakStartTime,
+            sourceDeviceId: deviceId,
+            stateUpdatedAt: stateUpdatedAt > 0 ? stateUpdatedAt : Date().timeIntervalSince1970
         )
     }
 
@@ -227,6 +268,16 @@ class SyncManager: ObservableObject {
         let useRemoteSettings = remote.lastModified > (lastSyncDate ?? Date.distantPast)
         let mergedSettings = useRemoteSettings ? remote.data.settings : local.settings
 
+        // 4. Timer state - použít novější a z jiného zařízení
+        var mergedTimerState: SyncData.FocusBlocksData.TimerState? = nil
+        let shouldUseRemoteTimer = shouldSyncRemoteTimer(local: local.timerState, remote: remote.data.timerState)
+
+        if shouldUseRemoteTimer, let remoteTimer = remote.data.timerState {
+            mergedTimerState = remoteTimer
+        } else {
+            mergedTimerState = local.timerState
+        }
+
         // Uložit sloučená data
         DispatchQueue.main.async {
             self.defaults.set(todayTimes, forKey: "completedBlockTimes")
@@ -242,8 +293,27 @@ class SyncManager: ObservableObject {
                 self.defaults.set(apiKey, forKey: "rescueTimeApiKey")
             }
 
+            // Uložit timer state
+            if let timerState = mergedTimerState {
+                self.defaults.set(timerState.isRunning, forKey: "syncTimerIsRunning")
+                self.defaults.set(timerState.isOnBreak, forKey: "syncTimerIsOnBreak")
+                self.defaults.set(timerState.blockStartTime, forKey: "syncTimerBlockStartTime")
+                self.defaults.set(timerState.breakStartTime, forKey: "syncTimerBreakStartTime")
+                self.defaults.set(timerState.stateUpdatedAt, forKey: "syncTimerStateUpdatedAt")
+            } else {
+                // Žádný aktivní timer
+                self.defaults.set(false, forKey: "syncTimerIsRunning")
+                self.defaults.set(false, forKey: "syncTimerIsOnBreak")
+            }
+
             // Notifikovat TimerManager o změně
             NotificationCenter.default.post(name: .syncDataUpdated, object: nil)
+
+            // Pokud se synchronizoval běžící timer z jiného zařízení, poslat speciální notifikaci
+            if shouldUseRemoteTimer, let remoteTimer = remote.data.timerState,
+               remoteTimer.sourceDeviceId != self.deviceId {
+                NotificationCenter.default.post(name: .syncRemoteTimerDetected, object: mergedTimerState)
+            }
 
             // Uložit aktualizovaná data zpět do souboru
             self.exportCurrentData()
@@ -263,6 +333,44 @@ class SyncManager: ObservableObject {
         notification.informativeText = "Nastavení byla synchronizována z druhého počítače"
         notification.soundName = NSUserNotificationDefaultSoundName
         NSUserNotificationCenter.default.deliver(notification)
+    }
+
+    private func shouldSyncRemoteTimer(local: SyncData.FocusBlocksData.TimerState?,
+                                      remote: SyncData.FocusBlocksData.TimerState?) -> Bool {
+        // Pokud není žádný remote timer, nepoužívat
+        guard let remoteTimer = remote else { return false }
+
+        // Pokud remote timer je z tohoto zařízení, nepoužívat (je to náš vlastní)
+        if remoteTimer.sourceDeviceId == deviceId {
+            return false
+        }
+
+        // Pokud není lokální timer, použít remote
+        guard let localTimer = local else { return true }
+
+        // Použít novější timer state
+        return remoteTimer.stateUpdatedAt > localTimer.stateUpdatedAt
+    }
+
+    // MARK: - Periodic Sync
+
+    private func startPeriodicSync() {
+        stopPeriodicSync()
+
+        // Synchronizovat každých 10 sekund pro real-time timer updates
+        DispatchQueue.main.async {
+            self.periodicSyncTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+                self?.syncNow()
+            }
+        }
+
+        print("✓ Periodická synchronizace spuštěna (každých 10s)")
+    }
+
+    private func stopPeriodicSync() {
+        periodicSyncTimer?.invalidate()
+        periodicSyncTimer = nil
+        print("✓ Periodická synchronizace zastavena")
     }
 
     // MARK: - File Monitoring
@@ -330,8 +438,23 @@ class SyncManager: ObservableObject {
         exportCurrentData()
     }
 
+    /// Aktualizuje stav timeru pro synchronizaci
+    func updateTimerState(isRunning: Bool, isOnBreak: Bool, blockStartTime: Date?, breakStartTime: Date?) {
+        guard isSyncEnabled else { return }
+
+        defaults.set(isRunning, forKey: "syncTimerIsRunning")
+        defaults.set(isOnBreak, forKey: "syncTimerIsOnBreak")
+        defaults.set(blockStartTime?.timeIntervalSince1970, forKey: "syncTimerBlockStartTime")
+        defaults.set(breakStartTime?.timeIntervalSince1970, forKey: "syncTimerBreakStartTime")
+        defaults.set(Date().timeIntervalSince1970, forKey: "syncTimerStateUpdatedAt")
+
+        // Okamžitě synchronizovat při změně stavu timeru
+        syncNow()
+    }
+
     deinit {
         stopMonitoring()
+        stopPeriodicSync()
     }
 }
 
@@ -339,4 +462,5 @@ class SyncManager: ObservableObject {
 
 extension Notification.Name {
     static let syncDataUpdated = Notification.Name("syncDataUpdated")
+    static let syncRemoteTimerDetected = Notification.Name("syncRemoteTimerDetected")
 }

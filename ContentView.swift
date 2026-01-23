@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var settingsExpanded: Bool = false
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     @State private var hoveredBlockIndex: Int? = nil
+    @State private var isRemoteTimer: Bool = false
 
     private var focusMinutesInt: Binding<Int> {
         Binding(
@@ -121,8 +122,22 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     Text(formatTime(timerManager.remainingTime))
                         .font(.system(size: 48, weight: .light, design: .monospaced))
-                    Text("Focus time")
-                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 6) {
+                        Text("Focus time")
+                            .foregroundColor(.secondary)
+
+                        if isRemoteTimer {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                                Text("sync")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
 
                     Button(action: {
                         timerManager.stopBlock()
@@ -464,6 +479,24 @@ struct ContentView: View {
         .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)
         .background(.thinMaterial)
+        .onAppear {
+            setupRemoteTimerObserver()
+        }
+    }
+
+    private func setupRemoteTimerObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .syncRemoteTimerDetected,
+            object: nil,
+            queue: .main
+        ) { [self] _ in
+            isRemoteTimer = true
+
+            // Po 3 sekundách skrýt indikátor
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                isRemoteTimer = false
+            }
+        }
     }
     
     func blockColor(for index: Int) -> Color {
