@@ -315,8 +315,8 @@ class SyncManager: ObservableObject {
                 NotificationCenter.default.post(name: .syncRemoteTimerDetected, object: mergedTimerState)
             }
 
-            // Uložit aktualizovaná data zpět do souboru
-            self.exportCurrentData()
+            // NEEXPORTOVAT zpět - pouze jsme četli
+            // Export se děje pouze když lokálně změníme stav (updateTimerState, saveState)
 
             self.lastSyncDate = Date()
 
@@ -357,14 +357,31 @@ class SyncManager: ObservableObject {
     private func startPeriodicSync() {
         stopPeriodicSync()
 
-        // Synchronizovat každých 10 sekund pro real-time timer updates
+        // Periodicky ČÍST změny každých 10 sekund (bez zápisu)
         DispatchQueue.main.async {
             self.periodicSyncTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
-                self?.syncNow()
+                self?.periodicRead()
             }
         }
 
         print("✓ Periodická synchronizace spuštěna (každých 10s)")
+    }
+
+    /// Periodické čtení bez zápisu - pouze načte změny z Dropboxu
+    private func periodicRead() {
+        guard isSyncEnabled, syncFolderPath != nil else { return }
+
+        // Pokud lokálně běží timer, není potřeba číst
+        let localTimerRunning = defaults.bool(forKey: "syncTimerIsRunning") ||
+                               defaults.bool(forKey: "syncTimerIsOnBreak")
+
+        if localTimerRunning {
+            // Timer už běží lokálně, nepotřebujeme číst
+            return
+        }
+
+        // Pouze načíst a mergovat (žádný zápis)
+        loadAndMerge()
     }
 
     private func stopPeriodicSync() {

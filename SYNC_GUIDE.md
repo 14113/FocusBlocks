@@ -139,10 +139,17 @@ Soubor `focusblocks-data.json` obsahuje:
 - Čekací doba 500ms zajišťuje, že Dropbox dokončí zápis
 
 ### Periodická synchronizace
-- **Real-time timer sync**: Každých 10 sekund
-- Automaticky synchronizuje běžící timer, pauzu a zbývající čas
-- Minimální zátěž na Dropbox (malý JSON soubor)
+- **Real-time timer sync**: Kontrola každých 10 sekund
+- Pouze ČTENÍ - žádné zápisy (velmi nízká zátěž)
+- Zápis pouze při změně stavu (start, stop, dokončení)
+- Optimalizováno: když timer běží lokálně, žádné čtení
 - Funguje pouze když je synchronizace zapnutá
+
+**Efektivní design:**
+- 1 zápis při startu timeru (obsahuje startTime + duration)
+- Ostatní počítače periodicky čtou (levné, žádný disk I/O)
+- Když timer běží lokálně → čtení se zastaví
+- Úspora: ~180 zápisů za 30min → pouze 1 zápis! ✓
 
 ### Bezpečnost
 - Data jsou uložena pouze lokálně ve vašem Dropboxu
@@ -211,7 +218,13 @@ Soubor `focusblocks-data.json` obsahuje:
 **A:** Timer se synchronizuje každých 10 sekund. To znamená maximální zpoždění 10 sekund mezi počítači.
 
 ### Q: Zvýší periodická synchronizace spotřebu baterie?
-**A:** Ne výrazně. Synchronizace běží pouze když je zapnutá a zapisuje malý JSON soubor (~2 KB) každých 10 sekund.
+**A:** Ne. Periodická sync pouze ČÍTÁ (žádný disk I/O). Zápis pouze při změně stavu timeru. Navíc když timer běží lokálně, čtení se automaticky zastaví.
+
+### Q: Kolik zápisů na disk to vytváří?
+**A:** Velmi málo! Při 30min focus bloku:
+- Starý přístup: ~180 zápisů (každých 10s)
+- Nový přístup: pouze 1 zápis při startu ✓
+- Úspora: 99.4%
 
 ## Podpora
 
