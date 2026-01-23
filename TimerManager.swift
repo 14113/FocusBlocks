@@ -49,6 +49,21 @@ class TimerManager: ObservableObject {
         loadDurations()
         scheduleMidnightReset()
         setupWakeObserver()
+        setupSyncObserver()
+    }
+
+    private func setupSyncObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .syncDataUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Data byla sloučena ze vzdáleného zdroje
+            self?.loadState()
+            self?.loadApiKey()
+            self?.loadDurations()
+            self?.onUpdate?()
+        }
     }
 
     private func setupWakeObserver() {
@@ -80,6 +95,7 @@ class TimerManager: ObservableObject {
     func saveApiKey(_ key: String) {
         rescueTimeApiKey = key
         defaults.set(key, forKey: "rescueTimeApiKey")
+        SyncManager.shared.syncNow()
     }
 
     func loadDurations() {
@@ -102,27 +118,32 @@ class TimerManager: ObservableObject {
     func saveOpenRescueTimeOnComplete(_ value: Bool) {
         openRescueTimeOnComplete = value
         defaults.set(value, forKey: "openRescueTimeOnComplete")
+        SyncManager.shared.syncNow()
     }
 
     func saveMaxBlocks(_ count: Int) {
         maxBlocks = count
         defaults.set(count, forKey: "maxBlocks")
+        SyncManager.shared.syncNow()
         onUpdate?()
     }
 
     func saveFocusDuration(_ minutes: Int) {
         focusDurationMinutes = minutes
         defaults.set(minutes, forKey: "focusDurationMinutes")
+        SyncManager.shared.syncNow()
     }
 
     func saveBreakDuration(_ minutes: Int) {
         breakDurationMinutes = minutes
         defaults.set(minutes, forKey: "breakDurationMinutes")
+        SyncManager.shared.syncNow()
     }
 
     func saveReminderDuration(_ minutes: Int) {
         reminderMinutes = minutes
         defaults.set(minutes, forKey: "reminderMinutes")
+        SyncManager.shared.syncNow()
     }
     
     func startBlock() {
@@ -398,6 +419,9 @@ class TimerManager: ObservableObject {
         defaults.set(today.timeIntervalSince1970, forKey: "lastDate")
         let timeIntervals = completedBlockTimes.map { $0.timeIntervalSince1970 }
         defaults.set(timeIntervals, forKey: "completedBlockTimes")
+
+        // Synchronizovat do Dropboxu
+        SyncManager.shared.syncNow()
     }
 
     func loadState() {
