@@ -49,6 +49,90 @@ class TimerManager: ObservableObject {
         loadDurations()
         scheduleMidnightReset()
         setupWakeObserver()
+        setupSyncObserver()
+    }
+
+    private func setupSyncObserver() {
+        // Observer pro běžné data změny
+        NotificationCenter.default.addObserver(
+            forName: .syncDataUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Data byla sloučena ze vzdáleného zdroje
+            self?.loadState()
+            self?.loadApiKey()
+            self?.loadDurations()
+            self?.onUpdate?()
+        }
+
+        // Observer pro remote timer detection
+        NotificationCenter.default.addObserver(
+            forName: .syncRemoteTimerDetected,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            // Běžící timer z jiného zařízení
+            self?.handleRemoteTimer(notification)
+        }
+    }
+
+    private func handleRemoteTimer(_ notification: Notification) {
+        guard let timerState = notification.object as? SyncManager.SyncData.FocusBlocksData.TimerState else {
+            return
+        }
+
+        // Pokud už běží lokální timer, ignorovat remote (preferovat lokální)
+        if isRunning || isOnBreak {
+            print("⚠️ Ignoruji vzdálený timer - lokální timer již běží")
+            return
+        }
+
+        // Načíst remote timer state
+        if timerState.isRunning, let startTime = timerState.blockStartTime {
+            let elapsed = Date().timeIntervalSince1970 - startTime
+            let remaining = blockDuration - elapsed
+
+            // Pokud timer ještě neexpiroval, spustit ho
+            if remaining > 0 {
+                print("🔄 Synchronizuji běžící timer z jiného zařízení")
+                isRunning = true
+                remainingTime = remaining
+                blockStartTime = Date(timeIntervalSince1970: startTime)
+
+                startSyncedTimer()
+                onUpdate?()
+            }
+        } else if timerState.isOnBreak, let breakStart = timerState.breakStartTime {
+            let elapsed = Date().timeIntervalSince1970 - breakStart
+            let remaining = breakDuration - elapsed
+
+            // Pokud pauza ještě neexpirovala
+            if remaining > 0 {
+                print("🔄 Synchronizuji pauzu z jiného zařízení")
+                isOnBreak = true
+                breakRemaining = remaining
+
+                startSyncedBreak()
+                onUpdate?()
+            }
+        }
+    }
+
+    private func startSyncedTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.tick()
+        }
+        RunLoop.main.add(timer!, forMode: .common)
+    }
+
+    private func startSyncedBreak() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.tick()
+        }
+        RunLoop.main.add(timer!, forMode: .common)
     }
 
     private func setupWakeObserver() {
@@ -80,6 +164,7 @@ class TimerManager: ObservableObject {
     func saveApiKey(_ key: String) {
         rescueTimeApiKey = key
         defaults.set(key, forKey: "rescueTimeApiKey")
+        SyncManager.shared.syncNow()
     }
 
     func loadDurations() {
@@ -102,27 +187,32 @@ class TimerManager: ObservableObject {
     func saveOpenRescueTimeOnComplete(_ value: Bool) {
         openRescueTimeOnComplete = value
         defaults.set(value, forKey: "openRescueTimeOnComplete")
+        SyncManager.shared.syncNow()
     }
 
     func saveMaxBlocks(_ count: Int) {
         maxBlocks = count
         defaults.set(count, forKey: "maxBlocks")
+        SyncManager.shared.syncNow()
         onUpdate?()
     }
 
     func saveFocusDuration(_ minutes: Int) {
         focusDurationMinutes = minutes
         defaults.set(minutes, forKey: "focusDurationMinutes")
+        SyncManager.shared.syncNow()
     }
 
     func saveBreakDuration(_ minutes: Int) {
         breakDurationMinutes = minutes
         defaults.set(minutes, forKey: "breakDurationMinutes")
+        SyncManager.shared.syncNow()
     }
 
     func saveReminderDuration(_ minutes: Int) {
         reminderMinutes = minutes
         defaults.set(minutes, forKey: "reminderMinutes")
+        SyncManager.shared.syncNow()
     }
     
     func startBlock() {
@@ -146,6 +236,15 @@ class TimerManager: ObservableObject {
         RunLoop.main.add(timer!, forMode: .common)
 
         saveState()
+
+        // Synchronizovat timer state
+        SyncManager.shared.updateTimerState(
+            isRunning: true,
+            isOnBreak: false,
+            blockStartTime: blockStartTime,
+            breakStartTime: nil
+        )
+
         onUpdate?()
     }
 
@@ -181,6 +280,14 @@ class TimerManager: ObservableObject {
         if completedBlocks >= maxBlocks {
             playSound()
             onShowPopover?()
+
+            // Timer ukončen - vymazat sync state
+            SyncManager.shared.updateTimerState(
+                isRunning: false,
+                isOnBreak: false,
+                blockStartTime: nil,
+                breakStartTime: nil
+            )
         } else {
             startBreak()
         }
@@ -192,6 +299,7 @@ class TimerManager: ObservableObject {
     func startBreak() {
         isOnBreak = true
         breakRemaining = breakDuration
+        let breakStart = Date()
 
         playSound()
         onShowPopover?()
@@ -201,6 +309,14 @@ class TimerManager: ObservableObject {
             self?.tick()
         }
         RunLoop.main.add(timer!, forMode: .common)
+
+        // Synchronizovat break state
+        SyncManager.shared.updateTimerState(
+            isRunning: false,
+            isOnBreak: true,
+            blockStartTime: nil,
+            breakStartTime: breakStart
+        )
     }
     
     func endBreak() {
@@ -209,6 +325,15 @@ class TimerManager: ObservableObject {
 
         playSound()
         onShowPopover?()
+
+        // Vymazat timer state
+        SyncManager.shared.updateTimerState(
+            isRunning: false,
+            isOnBreak: false,
+            blockStartTime: nil,
+            breakStartTime: nil
+        )
+
         onUpdate?()
 
         startReminderTimer()
@@ -237,6 +362,15 @@ class TimerManager: ObservableObject {
         timer?.invalidate()
         enableFocusMode(false)
         endRescueTimeFocus()
+
+        // Vymazat timer state
+        SyncManager.shared.updateTimerState(
+            isRunning: false,
+            isOnBreak: false,
+            blockStartTime: nil,
+            breakStartTime: nil
+        )
+
         onUpdate?()
     }
     
@@ -398,6 +532,9 @@ class TimerManager: ObservableObject {
         defaults.set(today.timeIntervalSince1970, forKey: "lastDate")
         let timeIntervals = completedBlockTimes.map { $0.timeIntervalSince1970 }
         defaults.set(timeIntervals, forKey: "completedBlockTimes")
+
+        // Synchronizovat do Dropboxu
+        SyncManager.shared.syncNow()
     }
 
     func loadState() {

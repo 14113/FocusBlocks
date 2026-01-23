@@ -3,12 +3,14 @@ import ServiceManagement
 
 struct ContentView: View {
     @ObservedObject var timerManager: TimerManager
+    @ObservedObject var syncManager = SyncManager.shared
     var onUpdate: () -> Void
     var onClosePopover: (() -> Void)?
     @State private var shuffledActivities: [String] = []
     @State private var settingsExpanded: Bool = false
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     @State private var hoveredBlockIndex: Int? = nil
+    @State private var isRemoteTimer: Bool = false
 
     private var focusMinutesInt: Binding<Int> {
         Binding(
@@ -120,8 +122,22 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     Text(formatTime(timerManager.remainingTime))
                         .font(.system(size: 48, weight: .light, design: .monospaced))
-                    Text("Focus time")
-                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 6) {
+                        Text("Focus time")
+                            .foregroundColor(.secondary)
+
+                        if isRemoteTimer {
+                            HStack(spacing: 3) {
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.blue)
+                                Text("sync")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
 
                     Button(action: {
                         timerManager.stopBlock()
@@ -362,6 +378,67 @@ struct ContentView: View {
 
                     Divider()
 
+                    // Dropbox Synchronization
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Synchronizace dat")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { syncManager.isSyncEnabled },
+                                set: { enabled in
+                                    if enabled {
+                                        selectDropboxFolder()
+                                    } else {
+                                        syncManager.disableSync()
+                                    }
+                                }
+                            ))
+                        }
+
+                        if syncManager.isSyncEnabled {
+                            VStack(alignment: .leading, spacing: 4) {
+                                if let folder = syncManager.syncFolderPath {
+                                    Text("Složka: \(folder)")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+
+                                HStack {
+                                    syncStatusView()
+
+                                    Spacer()
+
+                                    Button("Změnit složku") {
+                                        selectDropboxFolder()
+                                    }
+                                    .font(.system(size: 10))
+                                    .buttonStyle(.plain)
+                                    .foregroundColor(.blue)
+
+                                    Button(action: {
+                                        syncManager.syncNow()
+                                    }) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.system(size: 10))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundColor(.blue)
+                                }
+                            }
+                        } else {
+                            Text("Ukládá data do Dropbox složky pro synchronizaci mezi počítači")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Divider()
+
                     // RescueTime API
                     Text("RescueTime API Key:")
                         .font(.caption)
@@ -402,6 +479,24 @@ struct ContentView: View {
         .frame(width: 340)
         .fixedSize(horizontal: false, vertical: true)
         .background(.thinMaterial)
+        .onAppear {
+            setupRemoteTimerObserver()
+        }
+    }
+
+    private func setupRemoteTimerObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .syncRemoteTimerDetected,
+            object: nil,
+            queue: .main
+        ) { [self] _ in
+            isRemoteTimer = true
+
+            // Po 3 sekundách skrýt indikátor
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                isRemoteTimer = false
+            }
+        }
     }
     
     func blockColor(for index: Int) -> Color {
@@ -448,5 +543,78 @@ struct ContentView: View {
         } else {
             return "\(minutes)min"
         }
+    }
+
+    // MARK: - Sync helpers
+
+    func selectDropboxFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Vyberte složku pro synchronizaci"
+        panel.message = "Vyberte složku uvnitř Dropboxu (např. ~/Dropbox/FocusBlocks)"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+
+        // Nastavit defaultní cestu
+        if let dropboxPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Dropbox")
+            .path as String?,
+           FileManager.default.fileExists(atPath: dropboxPath) {
+            panel.directoryURL = URL(fileURLWithPath: dropboxPath)
+        }
+
+        if panel.runModal() == .OK, let url = panel.url {
+            syncManager.enableSync(folderPath: url.path)
+            onUpdate()
+        }
+    }
+
+    @ViewBuilder
+    func syncStatusView() -> some View {
+        HStack(spacing: 4) {
+            switch syncManager.syncStatus {
+            case .idle:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.system(size: 10))
+                Text("Připraveno")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+
+            case .syncing:
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 10, height: 10)
+                Text("Synchronizuji...")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+
+            case .success:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.system(size: 10))
+                if let date = syncManager.lastSyncDate {
+                    Text("Poslední sync: \(formatSyncDate(date))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+
+            case .error(let message):
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.red)
+                    .font(.system(size: 10))
+                Text(message)
+                    .font(.system(size: 10))
+                    .foregroundColor(.red)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    func formatSyncDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
