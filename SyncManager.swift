@@ -109,6 +109,9 @@ class SyncManager: ObservableObject {
         syncFolderPath = defaults.string(forKey: "syncFolderPath")
 
         if isSyncEnabled, syncFolderPath != nil {
+            // Načíst data ze sync souboru při startu
+            performInitialSync()
+
             startMonitoring()
             startPeriodicSync()
         }
