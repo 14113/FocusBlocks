@@ -50,6 +50,9 @@ class TimerManager: ObservableObject {
         scheduleMidnightReset()
         setupWakeObserver()
         setupSyncObserver()
+
+        // Obnovit běžící timer při startu appky
+        restoreRunningTimer()
     }
 
     private func setupSyncObserver() {
@@ -228,7 +231,7 @@ class TimerManager: ObservableObject {
 
         enableFocusMode(true)
         startRescueTimeFocus()
-        
+
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.tick()
@@ -237,13 +240,8 @@ class TimerManager: ObservableObject {
 
         saveState()
 
-        // Synchronizovat timer state
-        SyncManager.shared.updateTimerState(
-            isRunning: true,
-            isOnBreak: false,
-            blockStartTime: blockStartTime,
-            breakStartTime: nil
-        )
+        // Uložit timer state lokálně
+        saveTimerState(isRunning: true, isOnBreak: false, blockStart: blockStartTime, breakStart: nil)
 
         onUpdate?()
     }
@@ -281,13 +279,8 @@ class TimerManager: ObservableObject {
             playSound()
             onShowPopover?()
 
-            // Timer ukončen - vymazat sync state
-            SyncManager.shared.updateTimerState(
-                isRunning: false,
-                isOnBreak: false,
-                blockStartTime: nil,
-                breakStartTime: nil
-            )
+            // Timer ukončen - vymazat timer state
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
         } else {
             startBreak()
         }
@@ -310,13 +303,8 @@ class TimerManager: ObservableObject {
         }
         RunLoop.main.add(timer!, forMode: .common)
 
-        // Synchronizovat break state
-        SyncManager.shared.updateTimerState(
-            isRunning: false,
-            isOnBreak: true,
-            blockStartTime: nil,
-            breakStartTime: breakStart
-        )
+        // Uložit break state
+        saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: breakStart)
     }
     
     func endBreak() {
@@ -327,12 +315,7 @@ class TimerManager: ObservableObject {
         onShowPopover?()
 
         // Vymazat timer state
-        SyncManager.shared.updateTimerState(
-            isRunning: false,
-            isOnBreak: false,
-            blockStartTime: nil,
-            breakStartTime: nil
-        )
+        saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
 
         onUpdate?()
 
@@ -364,12 +347,7 @@ class TimerManager: ObservableObject {
         endRescueTimeFocus()
 
         // Vymazat timer state
-        SyncManager.shared.updateTimerState(
-            isRunning: false,
-            isOnBreak: false,
-            blockStartTime: nil,
-            breakStartTime: nil
-        )
+        saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
 
         onUpdate?()
     }
@@ -549,6 +527,80 @@ class TimerManager: ObservableObject {
         } else {
             completedBlocks = 0
             completedBlockTimes = []
+        }
+    }
+
+    private func saveTimerState(isRunning: Bool, isOnBreak: Bool, blockStart: Date?, breakStart: Date?) {
+        defaults.set(isRunning, forKey: "syncTimerIsRunning")
+        defaults.set(isOnBreak, forKey: "syncTimerIsOnBreak")
+        defaults.set(blockStart?.timeIntervalSince1970, forKey: "syncTimerBlockStartTime")
+        defaults.set(breakStart?.timeIntervalSince1970, forKey: "syncTimerBreakStartTime")
+        defaults.set(Date().timeIntervalSince1970, forKey: "syncTimerStateUpdatedAt")
+
+        // Synchronizovat do Dropboxu (pokud je zapnutý sync)
+        SyncManager.shared.updateTimerState(
+            isRunning: isRunning,
+            isOnBreak: isOnBreak,
+            blockStartTime: blockStart,
+            breakStartTime: breakStart
+        )
+    }
+
+    private func restoreRunningTimer() {
+        let timerIsRunning = defaults.bool(forKey: "syncTimerIsRunning")
+        let timerIsOnBreak = defaults.bool(forKey: "syncTimerIsOnBreak")
+
+        // Pokud timer běží, obnovit ho
+        if timerIsRunning, let startTimeInterval = defaults.object(forKey: "syncTimerBlockStartTime") as? TimeInterval {
+            let startTime = Date(timeIntervalSince1970: startTimeInterval)
+            let elapsed = Date().timeIntervalSince(startTime)
+            let remaining = blockDuration - elapsed
+
+            // Pokud timer ještě neexpiroval, spustit ho
+            if remaining > 0 {
+                print("🔄 Obnovuji běžící timer (\(Int(remaining))s zbývá)")
+                isRunning = true
+                remainingTime = remaining
+                blockStartTime = startTime
+
+                // Spustit focus mode
+                enableFocusMode(true)
+
+                // Spustit timer
+                timer?.invalidate()
+                timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    self?.tick()
+                }
+                RunLoop.main.add(timer!, forMode: .common)
+                onUpdate?()
+            } else {
+                // Timer expiroval - dokončit blok
+                print("⏱ Timer expiroval během vypnutí appky - dokončuji blok")
+                completeBlock()
+            }
+        } else if timerIsOnBreak, let breakStartInterval = defaults.object(forKey: "syncTimerBreakStartTime") as? TimeInterval {
+            let breakStart = Date(timeIntervalSince1970: breakStartInterval)
+            let elapsed = Date().timeIntervalSince(breakStart)
+            let remaining = breakDuration - elapsed
+
+            // Pokud pauza ještě neexpirovala
+            if remaining > 0 {
+                print("🔄 Obnovuji pauzu (\(Int(remaining))s zbývá)")
+                isOnBreak = true
+                breakRemaining = remaining
+
+                // Spustit timer
+                timer?.invalidate()
+                timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    self?.tick()
+                }
+                RunLoop.main.add(timer!, forMode: .common)
+                onUpdate?()
+            } else {
+                // Pauza expirovala - ukončit ji
+                print("⏸ Pauza expirovala během vypnutí appky - ukončuji")
+                endBreak()
+            }
         }
     }
 }
