@@ -378,7 +378,7 @@ struct ContentView: View {
 
                     Divider()
 
-                    // Dropbox Synchronization
+                    // Cloud Synchronization
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Synchronizace dat")
@@ -389,7 +389,7 @@ struct ContentView: View {
                                 get: { syncManager.isSyncEnabled },
                                 set: { enabled in
                                     if enabled {
-                                        selectDropboxFolder()
+                                        selectSyncFolder()
                                     } else {
                                         syncManager.disableSync()
                                     }
@@ -413,7 +413,7 @@ struct ContentView: View {
                                     Spacer()
 
                                     Button("Změnit složku") {
-                                        selectDropboxFolder()
+                                        selectSyncFolder()
                                     }
                                     .font(.system(size: 10))
                                     .buttonStyle(.plain)
@@ -430,7 +430,7 @@ struct ContentView: View {
                                 }
                             }
                         } else {
-                            Text("Ukládá data do Dropbox složky pro synchronizaci mezi počítači")
+                            Text("Ukládá data do cloudové složky (iCloud, Dropbox, apod.) pro synchronizaci mezi počítači")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -547,22 +547,14 @@ struct ContentView: View {
 
     // MARK: - Sync helpers
 
-    func selectDropboxFolder() {
+    func selectSyncFolder() {
         let panel = NSOpenPanel()
         panel.title = "Vyberte složku pro synchronizaci"
-        panel.message = "Vyberte složku uvnitř Dropboxu (např. ~/Dropbox/FocusBlocks)"
+        panel.message = "Vyberte složku v cloudu (iCloud Drive, Dropbox, Google Drive, apod.)"
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-
-        // Nastavit defaultní cestu
-        if let dropboxPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Dropbox")
-            .path as String?,
-           FileManager.default.fileExists(atPath: dropboxPath) {
-            panel.directoryURL = URL(fileURLWithPath: dropboxPath)
-        }
 
         if panel.runModal() == .OK, let url = panel.url {
             syncManager.enableSync(folderPath: url.path)

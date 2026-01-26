@@ -319,20 +319,7 @@ class SyncManager: ObservableObject {
             // Export se děje pouze když lokálně změníme stav (updateTimerState, saveState)
 
             self.lastSyncDate = Date()
-
-            if useRemoteSettings {
-                self.showSettingsChangedNotification()
-            }
         }
-    }
-
-    private func showSettingsChangedNotification() {
-        // Zobrazit macOS notifikaci
-        let notification = NSUserNotification()
-        notification.title = "FocusBlocks"
-        notification.informativeText = "Nastavení byla synchronizována z druhého počítače"
-        notification.soundName = NSUserNotificationDefaultSoundName
-        NSUserNotificationCenter.default.deliver(notification)
     }
 
     private func shouldSyncRemoteTimer(local: SyncData.FocusBlocksData.TimerState?,
