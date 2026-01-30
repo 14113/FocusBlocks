@@ -144,7 +144,48 @@ class TimerManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            self?.checkTimerAfterWake()
             self?.checkForNewDay()
+        }
+    }
+
+    private func checkTimerAfterWake() {
+        // Pokud běží focus blok, zkontrolovat jestli neexpiroval během spánku
+        if isRunning, let startTime = blockStartTime {
+            let elapsed = Date().timeIntervalSince(startTime)
+            let remaining = blockDuration - elapsed
+
+            if remaining <= 0 {
+                // Timer expiroval během spánku - dokončit blok
+                print("⏰ Timer expiroval během spánku notebooku - dokončuji blok")
+                timer?.invalidate()
+                completeExpiredBlock()
+            } else {
+                // Timer ještě běží - aktualizovat zbývající čas
+                print("🔄 Aktualizuji timer po probuzení (\(Int(remaining))s zbývá)")
+                remainingTime = remaining
+                onUpdate?()
+            }
+        }
+        // Pokud běží pauza, zkontrolovat jestli neexpirovala během spánku
+        else if isOnBreak {
+            if let breakStartInterval = defaults.object(forKey: "syncTimerBreakStartTime") as? TimeInterval {
+                let breakStart = Date(timeIntervalSince1970: breakStartInterval)
+                let elapsed = Date().timeIntervalSince(breakStart)
+                let remaining = breakDuration - elapsed
+
+                if remaining <= 0 {
+                    // Pauza expirovala během spánku - ukončit ji
+                    print("⏸ Pauza expirovala během spánku notebooku - ukončuji")
+                    timer?.invalidate()
+                    completeExpiredBreak()
+                } else {
+                    // Pauza ještě běží - aktualizovat zbývající čas
+                    print("🔄 Aktualizuji pauzu po probuzení (\(Int(remaining))s zbývá)")
+                    breakRemaining = remaining
+                    onUpdate?()
+                }
+            }
         }
     }
 
