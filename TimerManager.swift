@@ -4,8 +4,13 @@ import EventKit
 
 class TimerManager: ObservableObject {
     @Published var completedBlocks: Int = 0
-    @Published var completedBlockTimes: [Date] = []
+    @Published var completedBlocksData: [SyncManager.CompletedBlock] = []
     @Published var isRunning: Bool = false
+
+    // Pomocná property pro zpětnou kompatibilitu - vrací časy dokončení jako Date
+    var completedBlockTimes: [Date] {
+        completedBlocksData.map { Date(timeIntervalSince1970: $0.completedAt) }
+    }
     @Published var isOnBreak: Bool = false
     @Published var remainingTime: TimeInterval = 0
     @Published var breakRemaining: TimeInterval = 0
@@ -32,6 +37,16 @@ class TimerManager: ObservableObject {
     private let defaults = UserDefaults.standard
     private let eventStore = EKEventStore()
     private var blockStartTime: Date?
+
+    // Unikátní ID tohoto zařízení (sdílené se SyncManager)
+    private var deviceId: String {
+        if let saved = defaults.string(forKey: "deviceId") {
+            return saved
+        }
+        let newId = UUID().uuidString
+        defaults.set(newId, forKey: "deviceId")
+        return newId
+    }
 
     let activities = [
         "🚶 Procházka",
@@ -303,11 +318,47 @@ class TimerManager: ObservableObject {
     }
     
     func completeBlock() {
-        isRunning = false
-        completedBlocks += 1
-        let endTime = Date()
-        completedBlockTimes.append(endTime)
         timer?.invalidate()
+        isRunning = false
+
+        guard let startTime = blockStartTime else {
+            print("⚠️ Nelze dokončit blok - chybí blockStartTime")
+            enableFocusMode(false)
+            endRescueTimeFocus()
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            onUpdate?()
+            return
+        }
+
+        let startTimeInterval = startTime.timeIntervalSince1970
+        let endTime = startTime.addingTimeInterval(blockDuration)
+
+        // Zkontrolovat, jestli blok s tímto blockStartTime už neexistuje (mohl být dokončen na jiném zařízení)
+        let alreadyCompleted = completedBlocksData.contains { existingBlock in
+            abs(existingBlock.blockStartTime - startTimeInterval) < 1
+        }
+
+        if alreadyCompleted {
+            print("⚠️ Blok se startTime \(startTime) už byl dokončen na jiném zařízení - přeskakuji")
+            enableFocusMode(false)
+            endRescueTimeFocus()
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            // Načíst aktuální stav ze SYNC (completedBlocks může být vyšší)
+            loadState()
+            onUpdate?()
+            return
+        }
+
+        // Vytvořit nový CompletedBlock
+        let completedBlock = SyncManager.CompletedBlock(
+            blockStartTime: startTimeInterval,
+            completedAt: endTime.timeIntervalSince1970,
+            deviceId: deviceId
+        )
+
+        completedBlocks += 1
+        completedBlocksData.append(completedBlock)
+        print("✅ Blok dokončen: startTime=\(startTime), deviceId=\(deviceId)")
 
         enableFocusMode(false)
         endRescueTimeFocus()
@@ -395,7 +446,7 @@ class TimerManager: ObservableObject {
     
     func resetDay() {
         completedBlocks = 0
-        completedBlockTimes = []
+        completedBlocksData = []
         isRunning = false
         isOnBreak = false
         timer?.invalidate()
@@ -549,8 +600,11 @@ class TimerManager: ObservableObject {
         let today = Calendar.current.startOfDay(for: Date())
         defaults.set(completedBlocks, forKey: "completedBlocks")
         defaults.set(today.timeIntervalSince1970, forKey: "lastDate")
-        let timeIntervals = completedBlockTimes.map { $0.timeIntervalSince1970 }
-        defaults.set(timeIntervals, forKey: "completedBlockTimes")
+
+        // Nový formát - CompletedBlock jako JSON
+        if let encoded = try? JSONEncoder().encode(completedBlocksData) {
+            defaults.set(encoded, forKey: "completedBlocksData")
+        }
 
         // Synchronizovat do Dropboxu
         SyncManager.shared.syncNow()
@@ -562,12 +616,17 @@ class TimerManager: ObservableObject {
 
         if Calendar.current.isDate(today, inSameDayAs: lastDate) {
             completedBlocks = defaults.integer(forKey: "completedBlocks")
-            if let timeIntervals = defaults.array(forKey: "completedBlockTimes") as? [Double] {
-                completedBlockTimes = timeIntervals.map { Date(timeIntervalSince1970: $0) }
+
+            // Načíst nový formát CompletedBlock
+            if let data = defaults.data(forKey: "completedBlocksData"),
+               let decoded = try? JSONDecoder().decode([SyncManager.CompletedBlock].self, from: data) {
+                completedBlocksData = decoded
+            } else {
+                completedBlocksData = []
             }
         } else {
             completedBlocks = 0
-            completedBlockTimes = []
+            completedBlocksData = []
         }
     }
 
@@ -647,17 +706,49 @@ class TimerManager: ObservableObject {
 
     private func completeExpiredBlock() {
         // Bezpečně dokončit expirovaný blok bez otevírání popoverů a zvuků
+
+        // Zkontrolovat, že máme startTime pro výpočet času expirace
+        guard let startTime = blockStartTime else {
+            print("⚠️ Nelze dokončit expirovaný blok - chybí startTime")
+            isRunning = false
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            onUpdate?()
+            return
+        }
+
+        let startTimeInterval = startTime.timeIntervalSince1970
+        let endTime = startTime.addingTimeInterval(blockDuration)
+
+        // Zkontrolovat, jestli blok s tímto blockStartTime už neexistuje (mohl být dokončen na jiném zařízení)
+        let alreadyCompleted = completedBlocksData.contains { existingBlock in
+            abs(existingBlock.blockStartTime - startTimeInterval) < 1
+        }
+
+        if alreadyCompleted {
+            print("⚠️ Blok se startTime \(startTime) už byl dokončen (pravděpodobně na jiném zařízení) - přeskakuji")
+            isRunning = false
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            loadState()  // Načíst aktuální stav ze SYNC
+            onUpdate?()
+            return
+        }
+
+        // Vytvořit nový CompletedBlock
+        let completedBlock = SyncManager.CompletedBlock(
+            blockStartTime: startTimeInterval,
+            completedAt: endTime.timeIntervalSince1970,
+            deviceId: deviceId
+        )
+
         isRunning = false
         completedBlocks += 1
-        let endTime = Date()
-        completedBlockTimes.append(endTime)
+        completedBlocksData.append(completedBlock)
+        print("✅ Expirovaný blok dokončen: startTime=\(startTime), deviceId=\(deviceId)")
 
         enableFocusMode(false)
 
-        // Přidat do kalendáře (pokud máme startTime)
-        if let startTime = blockStartTime {
-            addCalendarEvent(blockNumber: completedBlocks, startTime: startTime, endTime: endTime)
-        }
+        // Přidat do kalendáře
+        addCalendarEvent(blockNumber: completedBlocks, startTime: startTime, endTime: endTime)
 
         if completedBlocks >= maxBlocks {
             // Všechny bloky dokončeny - vymazat timer state

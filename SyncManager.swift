@@ -33,6 +33,23 @@ class SyncManager: ObservableObject {
         case success
     }
 
+    /// Reprezentuje dokončený blok s informacemi pro deduplikaci
+    struct CompletedBlock: Codable, Hashable {
+        let blockStartTime: TimeInterval  // Unikátní identifikátor bloku
+        let completedAt: TimeInterval     // Kdy byl dokončen
+        let deviceId: String              // Které zařízení ho dokončilo
+
+        // Hashable podle blockStartTime - dva bloky se stejným startTime jsou stejný blok
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(blockStartTime)
+        }
+
+        static func == (lhs: CompletedBlock, rhs: CompletedBlock) -> Bool {
+            // Dva bloky jsou stejné pokud mají stejný blockStartTime (s tolerancí 1 sekundy)
+            return abs(lhs.blockStartTime - rhs.blockStartTime) < 1
+        }
+    }
+
     struct SyncData: Codable {
         let version: Int
         let lastModified: Date
@@ -40,7 +57,8 @@ class SyncManager: ObservableObject {
         let data: FocusBlocksData
 
         struct FocusBlocksData: Codable {
-            var completedBlockTimes: [TimeInterval]
+            var completedBlocks: [CompletedBlock]  // Změna: místo [TimeInterval]
+            var completedBlockTimes: [TimeInterval]?  // Zpětná kompatibilita - staré data
             var lastDate: TimeInterval
             var settings: Settings
             var timerState: TimerState?
@@ -195,7 +213,13 @@ class SyncManager: ObservableObject {
     // MARK: - Data Collection
 
     private func collectCurrentData() -> SyncData.FocusBlocksData {
-        let completedBlockTimes = (defaults.array(forKey: "completedBlockTimes") as? [TimeInterval]) ?? []
+        // Načíst nový formát CompletedBlock
+        var completedBlocks: [CompletedBlock] = []
+        if let data = defaults.data(forKey: "completedBlocksData"),
+           let decoded = try? JSONDecoder().decode([CompletedBlock].self, from: data) {
+            completedBlocks = decoded
+        }
+
         let lastDate = defaults.double(forKey: "lastDate")
 
         let settings = SyncData.FocusBlocksData.Settings(
@@ -215,7 +239,8 @@ class SyncManager: ObservableObject {
         let timerState = collectTimerState()
 
         return SyncData.FocusBlocksData(
-            completedBlockTimes: completedBlockTimes,
+            completedBlocks: completedBlocks,
+            completedBlockTimes: nil,  // Starý formát už nepoužíváme
             lastDate: lastDate,
             settings: settings,
             timerState: timerState
@@ -248,17 +273,52 @@ class SyncManager: ObservableObject {
     private func mergeData(remote: SyncData) {
         let local = collectCurrentData()
 
-        // 1. MERGE completedBlockTimes - spojit a odstranit duplikáty
-        var mergedTimes = Set(local.completedBlockTimes)
-        mergedTimes.formUnion(remote.data.completedBlockTimes)
-        let sortedTimes = mergedTimes.sorted()
+        // 1. MERGE completedBlocks - deduplikace podle blockStartTime
+        var mergedBlocksDict: [TimeInterval: CompletedBlock] = [:]
 
-        // Filtrovat pouze dnešní bloky
-        let today = Calendar.current.startOfDay(for: Date())
-        let todayTimes = sortedTimes.filter { timestamp in
-            let date = Date(timeIntervalSince1970: timestamp)
-            return Calendar.current.isDate(date, inSameDayAs: Date())
+        // Přidat lokální bloky
+        for block in local.completedBlocks {
+            // Zaokrouhlit blockStartTime na sekundy pro spolehlivou deduplikaci
+            let key = block.blockStartTime.rounded()
+            if mergedBlocksDict[key] == nil {
+                mergedBlocksDict[key] = block
+            }
         }
+
+        // Přidat remote bloky (pouze pokud ještě neexistují)
+        for block in remote.data.completedBlocks {
+            let key = block.blockStartTime.rounded()
+            if mergedBlocksDict[key] == nil {
+                mergedBlocksDict[key] = block
+            }
+        }
+
+        // Zpětná kompatibilita - starý formát completedBlockTimes
+        if let oldTimes = remote.data.completedBlockTimes {
+            for time in oldTimes {
+                let key = time.rounded()
+                if mergedBlocksDict[key] == nil {
+                    // Vytvořit CompletedBlock ze starého formátu
+                    // Použít completedAt jako blockStartTime (nemáme lepší data)
+                    mergedBlocksDict[key] = CompletedBlock(
+                        blockStartTime: time,
+                        completedAt: time,
+                        deviceId: "unknown"
+                    )
+                }
+            }
+        }
+
+        // Filtrovat pouze dnešní bloky a seřadit
+        let today = Calendar.current.startOfDay(for: Date())
+        let todayBlocks = mergedBlocksDict.values
+            .filter { block in
+                let date = Date(timeIntervalSince1970: block.completedAt)
+                return Calendar.current.isDate(date, inSameDayAs: Date())
+            }
+            .sorted { $0.completedAt < $1.completedAt }
+
+        print("📊 Merge: lokální=\(local.completedBlocks.count), remote=\(remote.data.completedBlocks.count), výsledek=\(todayBlocks.count)")
 
         // 2. Vzít novější lastDate
         let mergedLastDate = max(local.lastDate, remote.data.lastDate)
@@ -280,8 +340,11 @@ class SyncManager: ObservableObject {
 
         // Uložit sloučená data
         DispatchQueue.main.async {
-            self.defaults.set(todayTimes, forKey: "completedBlockTimes")
-            self.defaults.set(todayTimes.count, forKey: "completedBlocks")
+            // Nový formát - CompletedBlock jako JSON
+            if let encoded = try? JSONEncoder().encode(todayBlocks) {
+                self.defaults.set(encoded, forKey: "completedBlocksData")
+            }
+            self.defaults.set(todayBlocks.count, forKey: "completedBlocks")
             self.defaults.set(mergedLastDate, forKey: "lastDate")
 
             self.defaults.set(mergedSettings.focusDurationMinutes, forKey: "focusDurationMinutes")
