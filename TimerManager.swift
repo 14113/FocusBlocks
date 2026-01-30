@@ -303,11 +303,32 @@ class TimerManager: ObservableObject {
     }
     
     func completeBlock() {
-        isRunning = false
-        completedBlocks += 1
-        let endTime = Date()
-        completedBlockTimes.append(endTime)
         timer?.invalidate()
+        isRunning = false
+
+        // Použít vypočítaný čas expirace pro konzistenci mezi zařízeními
+        let endTime = blockStartTime?.addingTimeInterval(blockDuration) ?? Date()
+        let endTimeInterval = endTime.timeIntervalSince1970
+
+        // Zkontrolovat, jestli blok s tímto časem už neexistuje (mohl být dokončen na jiném zařízení)
+        // Tolerujeme rozdíl do 60 sekund
+        let alreadyCompleted = completedBlockTimes.contains { existingTime in
+            abs(existingTime.timeIntervalSince1970 - endTimeInterval) < 60
+        }
+
+        if alreadyCompleted {
+            print("⚠️ Blok s časem \(endTime) už byl dokončen na jiném zařízení - přeskakuji")
+            enableFocusMode(false)
+            endRescueTimeFocus()
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            // Načíst aktuální stav ze SYNC (completedBlocks může být vyšší)
+            loadState()
+            onUpdate?()
+            return
+        }
+
+        completedBlocks += 1
+        completedBlockTimes.append(endTime)
 
         enableFocusMode(false)
         endRescueTimeFocus()
@@ -647,17 +668,42 @@ class TimerManager: ObservableObject {
 
     private func completeExpiredBlock() {
         // Bezpečně dokončit expirovaný blok bez otevírání popoverů a zvuků
+
+        // Zkontrolovat, že máme startTime pro výpočet času expirace
+        guard let startTime = blockStartTime else {
+            print("⚠️ Nelze dokončit expirovaný blok - chybí startTime")
+            isRunning = false
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            onUpdate?()
+            return
+        }
+
+        // Použít vypočítaný čas expirace pro konzistenci mezi zařízeními
+        let endTime = startTime.addingTimeInterval(blockDuration)
+        let endTimeInterval = endTime.timeIntervalSince1970
+
+        // Zkontrolovat, jestli blok s tímto časem už neexistuje (mohl být dokončen na jiném zařízení)
+        // Tolerujeme rozdíl do 60 sekund kvůli možným drobným nesrovnalostem
+        let alreadyCompleted = completedBlockTimes.contains { existingTime in
+            abs(existingTime.timeIntervalSince1970 - endTimeInterval) < 60
+        }
+
+        if alreadyCompleted {
+            print("⚠️ Blok s časem \(endTime) už byl dokončen (pravděpodobně na jiném zařízení) - přeskakuji")
+            isRunning = false
+            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            onUpdate?()
+            return
+        }
+
         isRunning = false
         completedBlocks += 1
-        let endTime = Date()
         completedBlockTimes.append(endTime)
 
         enableFocusMode(false)
 
-        // Přidat do kalendáře (pokud máme startTime)
-        if let startTime = blockStartTime {
-            addCalendarEvent(blockNumber: completedBlocks, startTime: startTime, endTime: endTime)
-        }
+        // Přidat do kalendáře
+        addCalendarEvent(blockNumber: completedBlocks, startTime: startTime, endTime: endTime)
 
         if completedBlocks >= maxBlocks {
             // Všechny bloky dokončeny - vymazat timer state
