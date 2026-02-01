@@ -427,6 +427,11 @@ class TimerManager: ObservableObject {
 
     func showReminder() {
         guard !isRunning && !isOnBreak && completedBlocks < maxBlocks else { return }
+
+        // Po 18:00 nepouštět připomínky
+        let hour = Calendar.current.component(.hour, from: Date())
+        guard hour < 18 else { return }
+
         playSound()
         onShowPopover?()
     }
