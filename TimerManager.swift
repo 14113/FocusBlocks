@@ -132,6 +132,7 @@ class TimerManager: ObservableObject {
                 breakRemaining = remaining
 
                 startSyncedBreak()
+                BreakLockController.shared.show(durationSeconds: remaining, timerManager: self)
                 onUpdate?()
             }
         }
@@ -387,7 +388,6 @@ class TimerManager: ObservableObject {
         let breakStart = Date()
 
         playSound()
-        onShowPopover?()
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -397,11 +397,16 @@ class TimerManager: ObservableObject {
 
         // Uložit break state
         saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: breakStart)
+
+        // Tvrdý zámek obrazovky
+        BreakLockController.shared.show(durationSeconds: breakRemaining, timerManager: self)
     }
-    
+
     func endBreak() {
         isOnBreak = false
         timer?.invalidate()
+
+        BreakLockController.shared.hide()
 
         playSound()
         onShowPopover?()
@@ -440,6 +445,7 @@ class TimerManager: ObservableObject {
         isRunning = false
         isOnBreak = false
         timer?.invalidate()
+        BreakLockController.shared.hide()
         enableFocusMode(false)
         endRescueTimeFocus()
 
@@ -457,6 +463,7 @@ class TimerManager: ObservableObject {
         timer?.invalidate()
         reminderTimer?.invalidate()
         reminderTimer = nil
+        BreakLockController.shared.hide()
         enableFocusMode(false)
         saveState()
         onUpdate?()
@@ -700,6 +707,7 @@ class TimerManager: ObservableObject {
                     self?.tick()
                 }
                 RunLoop.main.add(timer!, forMode: .common)
+                BreakLockController.shared.show(durationSeconds: remaining, timerManager: self)
                 onUpdate?()
             } else {
                 // Pauza expirovala - ukončit ji bezpečně
@@ -783,6 +791,7 @@ class TimerManager: ObservableObject {
                     RunLoop.main.add(timer!, forMode: .common)
 
                     saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: endTime)
+                    BreakLockController.shared.show(durationSeconds: breakRemaining, timerManager: self)
                 } else {
                     // Pauza právě skončila
                     saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
@@ -798,6 +807,7 @@ class TimerManager: ObservableObject {
     private func completeExpiredBreak() {
         // Bezpečně ukončit expirovanou pauzu
         isOnBreak = false
+        BreakLockController.shared.hide()
 
         // Vymazat timer state
         saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
