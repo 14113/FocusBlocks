@@ -216,24 +216,6 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Co teď:")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-
-                        ForEach(timerManager.activities, id: \.self) { activity in
-                            HStack(spacing: 8) {
-                                Text(activity)
-                                    .font(.body)
-                            }
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(12)
-
-                    VStack(alignment: .leading, spacing: 8) {
                         Text("Dokončené bloky:")
                             .font(.subheadline)
                             .fontWeight(.semibold)
