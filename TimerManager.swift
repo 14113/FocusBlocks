@@ -449,9 +449,9 @@ class TimerManager: ObservableObject {
     func showReminder() {
         guard !isRunning && !isOnBreak else { return }
 
-        // Připomínky pouze mezi 5:00 a 18:00
+        // Připomínky pouze od 5:00 (bez horního limitu - overtime bloky mohou být i po 18:00)
         let hour = Calendar.current.component(.hour, from: Date())
-        guard hour >= 5 && hour < 18 else { return }
+        guard hour >= 5 else { return }
 
         playSound()
         onShowPopover?()
