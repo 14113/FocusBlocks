@@ -68,6 +68,11 @@ class TimerManager: ObservableObject {
 
         // Obnovit běžící timer při startu appky
         restoreRunningTimer()
+
+        // Pokud nic neběží a den ještě není hotový, rozjet připomínky (např. ranní start)
+        if !isRunning && !isOnBreak && completedBlocks < maxBlocks {
+            startReminderTimer()
+        }
     }
 
     private func setupSyncObserver() {
@@ -433,9 +438,9 @@ class TimerManager: ObservableObject {
     func showReminder() {
         guard !isRunning && !isOnBreak && completedBlocks < maxBlocks else { return }
 
-        // Po 18:00 nepouštět připomínky
+        // Připomínky pouze mezi 5:00 a 18:00
         let hour = Calendar.current.component(.hour, from: Date())
-        guard hour < 18 else { return }
+        guard hour >= 5 && hour < 18 else { return }
 
         playSound()
         onShowPopover?()
@@ -467,8 +472,11 @@ class TimerManager: ObservableObject {
         enableFocusMode(false)
         saveState()
         onUpdate?()
+
+        // Začít připomínat hned od rána, aby uživatel nezmeškal start prvního bloku
+        startReminderTimer()
     }
-    
+
     // MARK: - Focus Mode
     
     func enableFocusMode(_ enable: Bool) {
