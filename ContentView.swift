@@ -47,6 +47,13 @@ struct ContentView: View {
         )
     }
 
+    private var breakInstructionText: Binding<String> {
+        Binding(
+            get: { timerManager.breakInstruction },
+            set: { timerManager.saveBreakInstruction($0) }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // Progress visualization
@@ -358,6 +365,13 @@ struct ContentView: View {
                         Text("min")
                             .font(.caption)
                             .foregroundColor(.clear)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Text na zámku obrazovky:")
+                            .font(.caption)
+                        TextField("", text: breakInstructionText)
+                            .textFieldStyle(.roundedBorder)
                     }
 
                     Divider()

@@ -70,6 +70,7 @@ class SyncManager: ObservableObject {
                 var maxBlocks: Int
                 var openRescueTimeOnComplete: Bool
                 var rescueTimeApiKey: String?
+                var breakInstruction: String?
             }
 
             struct TimerState: Codable {
@@ -232,7 +233,8 @@ class SyncManager: ObservableObject {
             maxBlocks: defaults.integer(forKey: "maxBlocks") != 0 ?
                 defaults.integer(forKey: "maxBlocks") : 10,
             openRescueTimeOnComplete: defaults.bool(forKey: "openRescueTimeOnComplete"),
-            rescueTimeApiKey: defaults.string(forKey: "rescueTimeApiKey")
+            rescueTimeApiKey: defaults.string(forKey: "rescueTimeApiKey"),
+            breakInstruction: defaults.string(forKey: "breakInstruction")
         )
 
         // Načíst timer state
@@ -354,6 +356,9 @@ class SyncManager: ObservableObject {
             self.defaults.set(mergedSettings.openRescueTimeOnComplete, forKey: "openRescueTimeOnComplete")
             if let apiKey = mergedSettings.rescueTimeApiKey {
                 self.defaults.set(apiKey, forKey: "rescueTimeApiKey")
+            }
+            if let instruction = mergedSettings.breakInstruction, !instruction.isEmpty {
+                self.defaults.set(instruction, forKey: "breakInstruction")
             }
 
             // Uložit timer state

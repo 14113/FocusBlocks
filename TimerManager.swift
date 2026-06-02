@@ -20,6 +20,7 @@ class TimerManager: ObservableObject {
     @Published var breakDurationMinutes: Int = 5
     @Published var reminderMinutes: Int = 15
     @Published var maxBlocks: Int = 10
+    @Published var breakInstruction: String = "Jeden nádech do břicha, zavři oči"
 
     var blockDuration: TimeInterval {
         TimeInterval(focusDurationMinutes * 60)
@@ -242,6 +243,12 @@ class TimerManager: ObservableObject {
         reminderMinutes = savedReminder > 0 ? savedReminder : 15
         maxBlocks = savedMaxBlocks > 0 ? savedMaxBlocks : 10
 
+        if let savedInstruction = defaults.string(forKey: "breakInstruction"), !savedInstruction.isEmpty {
+            breakInstruction = savedInstruction
+        } else {
+            breakInstruction = "Jeden nádech do břicha, zavři oči"
+        }
+
         if defaults.object(forKey: "openRescueTimeOnComplete") != nil {
             openRescueTimeOnComplete = defaults.bool(forKey: "openRescueTimeOnComplete")
         } else {
@@ -277,6 +284,12 @@ class TimerManager: ObservableObject {
     func saveReminderDuration(_ minutes: Int) {
         reminderMinutes = minutes
         defaults.set(minutes, forKey: "reminderMinutes")
+        SyncManager.shared.syncNow()
+    }
+
+    func saveBreakInstruction(_ text: String) {
+        breakInstruction = text
+        defaults.set(text, forKey: "breakInstruction")
         SyncManager.shared.syncNow()
     }
     

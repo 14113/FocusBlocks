@@ -25,7 +25,7 @@ final class BreakLockController {
         self.timerManager = timerManager
         self.startedAt = Date()
 
-        buildWindows(durationSeconds: durationSeconds)
+        buildWindows(durationSeconds: durationSeconds, instruction: timerManager.breakInstruction)
 
         // Sledovat změny konfigurace monitorů (přepojení displeje atd.)
         screenChangeObserver = NotificationCenter.default.addObserver(
@@ -33,7 +33,7 @@ final class BreakLockController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.rebuildWindows(durationSeconds: durationSeconds)
+            self?.rebuildWindows(durationSeconds: durationSeconds, instruction: timerManager.breakInstruction)
         }
 
         NSApp.activate(ignoringOtherApps: true)
@@ -54,13 +54,14 @@ final class BreakLockController {
         startedAt = nil
     }
 
-    private func buildWindows(durationSeconds: TimeInterval) {
+    private func buildWindows(durationSeconds: TimeInterval, instruction: String) {
         for screen in NSScreen.screens {
             let window = BreakLockWindow(screen: screen)
             let view = BreakLockView(
                 totalDuration: durationSeconds,
                 minimumLockSeconds: minimumLockSeconds,
                 startedAt: startedAt ?? Date(),
+                instruction: instruction,
                 onSkip: { [weak self] in self?.skip() }
             )
             window.contentView = NSHostingView(rootView: view)
@@ -69,10 +70,10 @@ final class BreakLockController {
         }
     }
 
-    private func rebuildWindows(durationSeconds: TimeInterval) {
+    private func rebuildWindows(durationSeconds: TimeInterval, instruction: String) {
         for w in windows { w.orderOut(nil); w.close() }
         windows.removeAll()
-        buildWindows(durationSeconds: durationSeconds)
+        buildWindows(durationSeconds: durationSeconds, instruction: instruction)
     }
 
     private func skip() {
@@ -185,6 +186,7 @@ private struct BreakLockView: View {
     let totalDuration: TimeInterval
     let minimumLockSeconds: TimeInterval
     let startedAt: Date
+    let instruction: String
     let onSkip: () -> Void
 
     @State private var now: Date = Date()
@@ -202,30 +204,41 @@ private struct BreakLockView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 28) {
-                Text(formattedTime)
-                    .font(.system(size: 140, weight: .ultraLight, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.92))
-                    .kerning(2)
 
-                if unlockIn > 0 {
-                    Text("odemčení za \(Int(unlockIn)) s")
-                        .font(.system(size: 12, weight: .regular, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.22))
-                } else {
-                    Button(action: onSkip) {
-                        Text("Přeskočit")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.55))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                            )
+            Text(instruction)
+                .font(.system(size: 64, weight: .light))
+                .foregroundColor(.white.opacity(0.95))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 80)
+
+            VStack {
+                Spacer()
+                VStack(spacing: 10) {
+                    Text(formattedTime)
+                        .font(.system(size: 22, weight: .ultraLight, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.45))
+                        .kerning(1)
+
+                    if unlockIn > 0 {
+                        Text("odemčení za \(Int(unlockIn)) s")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.22))
+                    } else {
+                        Button(action: onSkip) {
+                            Text("Přeskočit")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.5))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.bottom, 40)
             }
         }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { date in
