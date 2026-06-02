@@ -559,7 +559,10 @@ struct ContentView: View {
     }
 
     func formatTotalTime() -> String {
-        let totalMinutes = timerManager.completedBlocks * timerManager.focusDurationMinutes
+        let totalSeconds = timerManager.completedBlocksData.reduce(0.0) { sum, block in
+            sum + (block.completedAt - block.blockStartTime)
+        }
+        let totalMinutes = Int(totalSeconds) / 60
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
         if hours > 0 {
