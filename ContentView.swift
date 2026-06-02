@@ -65,50 +65,65 @@ struct ContentView: View {
                 }
             ZStack(alignment: .bottom) {
                 VStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        ForEach(0..<timerManager.maxBlocks, id: \.self) { index in
-                            ZStack {
-                                if index == timerManager.completedBlocks && timerManager.isRunning {
-                                    // Active block - focus indicator
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color.orange, Color.orange.opacity(0.8)],
-                                                startPoint: .top,
-                                                endPoint: .bottom
+                    let totalBlocksToShow = max(timerManager.maxBlocks, timerManager.completedBlocks + (timerManager.isRunning ? 1 : 0))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(0..<totalBlocksToShow, id: \.self) { index in
+                                let isExtra = index >= timerManager.maxBlocks
+                                ZStack {
+                                    if index == timerManager.completedBlocks && timerManager.isRunning {
+                                        // Active block - focus indicator
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color.orange, Color.orange.opacity(0.8)],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                )
                                             )
-                                        )
-                                        .frame(width: 26, height: 26)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color.orange.opacity(0.6), lineWidth: 2)
-                                        )
-                                        .shadow(color: Color.orange.opacity(0.5), radius: 4, x: 0, y: 2)
+                                            .frame(width: 26, height: 26)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.orange.opacity(0.6), lineWidth: 2)
+                                            )
+                                            .shadow(color: Color.orange.opacity(0.5), radius: 4, x: 0, y: 2)
 
-                                    Image(systemName: "flame.fill")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(.white)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(blockColor(for: index))
-                                        .frame(width: 26, height: 26)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(index < timerManager.completedBlocks ? Color.green.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 1)
-                                        )
-                                        .shadow(color: index < timerManager.completedBlocks ? Color.green.opacity(0.3) : Color.clear, radius: 2, x: 0, y: 1)
-
-                                    if index < timerManager.completedBlocks {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 12, weight: .bold))
+                                        Image(systemName: "flame.fill")
+                                            .font(.system(size: 12, weight: .semibold))
                                             .foregroundColor(.white)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(blockColor(for: index))
+                                            .frame(width: 26, height: 26)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(
+                                                        index < timerManager.completedBlocks
+                                                            ? (isExtra ? Color.purple.opacity(0.5) : Color.green.opacity(0.5))
+                                                            : Color.gray.opacity(0.3),
+                                                        lineWidth: 1
+                                                    )
+                                            )
+                                            .shadow(
+                                                color: index < timerManager.completedBlocks
+                                                    ? (isExtra ? Color.purple.opacity(0.3) : Color.green.opacity(0.3))
+                                                    : Color.clear,
+                                                radius: 2, x: 0, y: 1
+                                            )
+
+                                        if index < timerManager.completedBlocks {
+                                            Image(systemName: isExtra ? "bolt.fill" : "checkmark")
+                                                .font(.system(size: 12, weight: .bold))
+                                                .foregroundColor(.white)
+                                        }
                                     }
                                 }
-                            }
-                            .onHover { isHovered in
-                                hoveredBlockIndex = isHovered ? index : nil
+                                .onHover { isHovered in
+                                    hoveredBlockIndex = isHovered ? index : nil
+                                }
                             }
                         }
+                        .padding(.horizontal, 2)
                     }
                     .frame(width: 300)
 
@@ -262,7 +277,8 @@ struct ContentView: View {
             }
 
             // Controls
-            if !timerManager.isRunning && !timerManager.isOnBreak && timerManager.completedBlocks < timerManager.maxBlocks {
+            if !timerManager.isRunning && !timerManager.isOnBreak {
+                let isOvertime = timerManager.completedBlocks >= timerManager.maxBlocks
                 Spacer()
                     .frame(height: 16)
 
@@ -274,22 +290,34 @@ struct ContentView: View {
                     }
                 }) {
                     HStack(spacing: 8) {
-                        Image(systemName: "play.fill")
+                        Image(systemName: isOvertime ? "bolt.fill" : "play.fill")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("Start")
-                            .font(.system(size: 16, weight: .semibold))
+                        VStack(spacing: 2) {
+                            Text(isOvertime ? "Extra blok" : "Start")
+                                .font(.system(size: 16, weight: .semibold))
+                            if isOvertime {
+                                Text("pauza 2x delší")
+                                    .font(.system(size: 10))
+                                    .opacity(0.85)
+                            }
+                        }
                     }
                     .foregroundColor(.white)
                     .frame(minWidth: 120, minHeight: 44)
                     .background(
                         LinearGradient(
-                            colors: [Color(red: 0.2, green: 0.8, blue: 0.4), Color(red: 0.1, green: 0.6, blue: 0.3)],
+                            colors: isOvertime
+                                ? [Color.purple, Color.purple.opacity(0.8)]
+                                : [Color(red: 0.2, green: 0.8, blue: 0.4), Color(red: 0.1, green: 0.6, blue: 0.3)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                     .cornerRadius(12)
-                    .shadow(color: Color(red: 0.1, green: 0.6, blue: 0.3).opacity(0.4), radius: 4, x: 0, y: 2)
+                    .shadow(
+                        color: (isOvertime ? Color.purple : Color(red: 0.1, green: 0.6, blue: 0.3)).opacity(0.4),
+                        radius: 4, x: 0, y: 2
+                    )
                 }
                 .buttonStyle(.plain)
 
@@ -515,7 +543,7 @@ struct ContentView: View {
     
     func blockColor(for index: Int) -> Color {
         if index < timerManager.completedBlocks {
-            return .green
+            return index >= timerManager.maxBlocks ? .purple : .green
         } else if index == timerManager.completedBlocks && timerManager.isRunning {
             return .blue
         } else {

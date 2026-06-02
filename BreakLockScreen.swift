@@ -15,15 +15,15 @@ final class BreakLockController {
     private var startedAt: Date?
     private weak var timerManager: TimerManager?
     private var screenChangeObserver: NSObjectProtocol?
-
-    private let minimumLockSeconds: TimeInterval = 60
+    private var currentMinimumLockSeconds: TimeInterval = 60
 
     var isShowing: Bool { !windows.isEmpty }
 
-    func show(durationSeconds: TimeInterval, timerManager: TimerManager) {
+    func show(durationSeconds: TimeInterval, minimumLockSeconds: TimeInterval = 60, timerManager: TimerManager) {
         guard !isShowing else { return }
         self.timerManager = timerManager
         self.startedAt = Date()
+        self.currentMinimumLockSeconds = minimumLockSeconds
 
         buildWindows(durationSeconds: durationSeconds, instruction: timerManager.breakInstruction)
 
@@ -59,7 +59,7 @@ final class BreakLockController {
             let window = BreakLockWindow(screen: screen)
             let view = BreakLockView(
                 totalDuration: durationSeconds,
-                minimumLockSeconds: minimumLockSeconds,
+                minimumLockSeconds: currentMinimumLockSeconds,
                 startedAt: startedAt ?? Date(),
                 instruction: instruction,
                 onSkip: { [weak self] in self?.skip() }
@@ -78,7 +78,7 @@ final class BreakLockController {
 
     private func skip() {
         guard let start = startedAt,
-              Date().timeIntervalSince(start) >= minimumLockSeconds else { return }
+              Date().timeIntervalSince(start) >= currentMinimumLockSeconds else { return }
         timerManager?.endBreak()
     }
 

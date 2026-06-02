@@ -70,8 +70,8 @@ class TimerManager: ObservableObject {
         // Obnovit běžící timer při startu appky
         restoreRunningTimer()
 
-        // Pokud nic neběží a den ještě není hotový, rozjet připomínky (např. ranní start)
-        if !isRunning && !isOnBreak && completedBlocks < maxBlocks {
+        // Pokud nic neběží, rozjet připomínky (i po splnění všech plánovaných bloků)
+        if !isRunning && !isOnBreak {
             startReminderTimer()
         }
     }
@@ -194,7 +194,9 @@ class TimerManager: ObservableObject {
             if let breakStartInterval = defaults.object(forKey: "syncTimerBreakStartTime") as? TimeInterval {
                 let breakStart = Date(timeIntervalSince1970: breakStartInterval)
                 let elapsed = Date().timeIntervalSince(breakStart)
-                let remaining = breakDuration - elapsed
+                let storedBreakDuration = defaults.double(forKey: "syncTimerBreakDuration")
+                let effectiveBreakDuration = storedBreakDuration > 0 ? storedBreakDuration : breakDuration
+                let remaining = effectiveBreakDuration - elapsed
 
                 if remaining <= 0 {
                     // Pauza expirovala během spánku - ukončit ji
@@ -294,8 +296,6 @@ class TimerManager: ObservableObject {
     }
     
     func startBlock() {
-        guard completedBlocks < maxBlocks else { return }
-
         reminderTimer?.invalidate()
         reminderTimer = nil
 
@@ -386,26 +386,25 @@ class TimerManager: ObservableObject {
             openRescueTimeDashboard()
         }
 
-        if completedBlocks >= maxBlocks {
-            playSound()
-            onShowPopover?()
+        let isNowOvertime = completedBlocks >= maxBlocks
+        let actualBreakDuration = isNowOvertime ? breakDuration * 2 : breakDuration
 
-            // Timer ukončen - vymazat timer state
-            saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
-        } else {
-            startBreak()
-        }
+        playSound()
+        onShowPopover?()
+        startBreak(duration: actualBreakDuration)
 
         saveState()
         onUpdate?()
     }
     
-    func startBreak() {
+    func startBreak(duration: TimeInterval? = nil) {
+        let actualDuration = duration ?? breakDuration
         isOnBreak = true
-        breakRemaining = breakDuration
+        breakRemaining = actualDuration
         let breakStart = Date()
 
-        playSound()
+        // Uložit skutečnou délku pauzy pro správné obnovení po restartu/spánku
+        defaults.set(actualDuration, forKey: "syncTimerBreakDuration")
 
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -416,8 +415,9 @@ class TimerManager: ObservableObject {
         // Uložit break state
         saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: breakStart)
 
-        // Tvrdý zámek obrazovky
-        BreakLockController.shared.show(durationSeconds: breakRemaining, timerManager: self)
+        // Tvrdý zámek obrazovky - extra bloky mají dvojnásobný minimální zámek (2 min)
+        let minimumLock: TimeInterval = actualDuration > breakDuration ? 120 : 60
+        BreakLockController.shared.show(durationSeconds: actualDuration, minimumLockSeconds: minimumLock, timerManager: self)
     }
 
     func endBreak() {
@@ -438,8 +438,6 @@ class TimerManager: ObservableObject {
     }
 
     func startReminderTimer() {
-        guard completedBlocks < maxBlocks else { return }
-
         reminderTimer?.invalidate()
         let reminderInterval = TimeInterval(reminderMinutes * 60)
         reminderTimer = Timer.scheduledTimer(withTimeInterval: reminderInterval, repeats: true) { [weak self] _ in
@@ -449,7 +447,7 @@ class TimerManager: ObservableObject {
     }
 
     func showReminder() {
-        guard !isRunning && !isOnBreak && completedBlocks < maxBlocks else { return }
+        guard !isRunning && !isOnBreak else { return }
 
         // Připomínky pouze mezi 5:00 a 18:00
         let hour = Calendar.current.component(.hour, from: Date())
@@ -714,7 +712,9 @@ class TimerManager: ObservableObject {
         } else if timerIsOnBreak, let breakStartInterval = defaults.object(forKey: "syncTimerBreakStartTime") as? TimeInterval {
             let breakStart = Date(timeIntervalSince1970: breakStartInterval)
             let elapsed = Date().timeIntervalSince(breakStart)
-            let remaining = breakDuration - elapsed
+            let storedBreakDuration = defaults.double(forKey: "syncTimerBreakDuration")
+            let effectiveBreakDuration = storedBreakDuration > 0 ? storedBreakDuration : breakDuration
+            let remaining = effectiveBreakDuration - elapsed
 
             // Pokud pauza ještě neexpirovala
             if remaining > 0 {
@@ -728,7 +728,8 @@ class TimerManager: ObservableObject {
                     self?.tick()
                 }
                 RunLoop.main.add(timer!, forMode: .common)
-                BreakLockController.shared.show(durationSeconds: remaining, timerManager: self)
+                let minimumLock: TimeInterval = effectiveBreakDuration > breakDuration ? 120 : 60
+                BreakLockController.shared.show(durationSeconds: remaining, minimumLockSeconds: minimumLock, timerManager: self)
                 onUpdate?()
             } else {
                 // Pauza expirovala - ukončit ji bezpečně
@@ -784,40 +785,37 @@ class TimerManager: ObservableObject {
         // Přidat do kalendáře
         addCalendarEvent(blockNumber: completedBlocks, startTime: startTime, endTime: endTime)
 
-        if completedBlocks >= maxBlocks {
-            // Všechny bloky dokončeny - vymazat timer state
+        // Extra bloky mají dvojnásobnou pauzu
+        let isNowOvertime = completedBlocks >= maxBlocks
+        let actualBreakDuration = isNowOvertime ? breakDuration * 2 : breakDuration
+        let expectedBreakEnd = endTime.addingTimeInterval(actualBreakDuration)
+
+        if Date() > expectedBreakEnd {
+            print("⏸ Pauza také expirovala během vypnutí appky")
             saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
+            startReminderTimer()
         } else {
-            // Zkontrolovat, jestli už neuplynula i pauza
-            let expectedBreakEnd = endTime.addingTimeInterval(breakDuration)
-            if Date() > expectedBreakEnd {
-                // Pauza už také uplynula - vymazat timer state a spustit reminder
-                print("⏸ Pauza také expirovala během vypnutí appky")
+            let breakElapsed = Date().timeIntervalSince(endTime)
+            let breakRemainingTime = actualBreakDuration - breakElapsed
+
+            if breakRemainingTime > 0 {
+                print("🔄 Spouštím zbývající pauzu (\(Int(breakRemainingTime))s)")
+                isOnBreak = true
+                self.breakRemaining = breakRemainingTime
+
+                defaults.set(actualBreakDuration, forKey: "syncTimerBreakDuration")
+                timer?.invalidate()
+                timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    self?.tick()
+                }
+                RunLoop.main.add(timer!, forMode: .common)
+
+                saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: endTime)
+                let minimumLock: TimeInterval = actualBreakDuration > breakDuration ? 120 : 60
+                BreakLockController.shared.show(durationSeconds: breakRemainingTime, minimumLockSeconds: minimumLock, timerManager: self)
+            } else {
                 saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
                 startReminderTimer()
-            } else {
-                // Pauza ještě běží nebo právě končí - spustit pauzu s vypočítaným časem
-                let breakElapsed = Date().timeIntervalSince(endTime)
-                let breakRemaining = breakDuration - breakElapsed
-
-                if breakRemaining > 0 {
-                    print("🔄 Spouštím zbývající pauzu (\(Int(breakRemaining))s)")
-                    isOnBreak = true
-                    self.breakRemaining = breakRemaining
-
-                    timer?.invalidate()
-                    timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                        self?.tick()
-                    }
-                    RunLoop.main.add(timer!, forMode: .common)
-
-                    saveTimerState(isRunning: false, isOnBreak: true, blockStart: nil, breakStart: endTime)
-                    BreakLockController.shared.show(durationSeconds: breakRemaining, timerManager: self)
-                } else {
-                    // Pauza právě skončila
-                    saveTimerState(isRunning: false, isOnBreak: false, blockStart: nil, breakStart: nil)
-                    startReminderTimer()
-                }
             }
         }
 
