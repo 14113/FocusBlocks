@@ -25,7 +25,12 @@ final class BreakLockController {
         self.startedAt = Date()
         self.currentMinimumLockSeconds = minimumLockSeconds
 
-        buildWindows(durationSeconds: durationSeconds, instruction: timerManager.breakInstruction)
+        // Po splnění všech bloků (i extra bloků) ukázat na zámku závěrečnou větu místo běžné instrukce.
+        let lockText = timerManager.completedBlocks >= timerManager.maxBlocks
+            ? timerManager.completionMessage
+            : timerManager.breakInstruction
+
+        buildWindows(durationSeconds: durationSeconds, instruction: lockText)
 
         // Sledovat změny konfigurace monitorů (přepojení displeje atd.)
         screenChangeObserver = NotificationCenter.default.addObserver(
@@ -33,7 +38,7 @@ final class BreakLockController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.rebuildWindows(durationSeconds: durationSeconds, instruction: timerManager.breakInstruction)
+            self?.rebuildWindows(durationSeconds: durationSeconds, instruction: lockText)
         }
 
         NSApp.activate(ignoringOtherApps: true)

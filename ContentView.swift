@@ -54,6 +54,69 @@ struct ContentView: View {
         )
     }
 
+    private var completionMessageText: Binding<String> {
+        Binding(
+            get: { timerManager.completionMessage },
+            set: { timerManager.saveCompletionMessage($0) }
+        )
+    }
+
+    @ViewBuilder
+    private func blockView(index: Int) -> some View {
+        let isExtra = index >= timerManager.maxBlocks
+        ZStack {
+            if index == timerManager.completedBlocks && timerManager.isRunning {
+                // Active block - focus indicator
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.orange, Color.orange.opacity(0.8)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 26, height: 26)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.orange.opacity(0.6), lineWidth: 2)
+                    )
+                    .shadow(color: Color.orange.opacity(0.5), radius: 4, x: 0, y: 2)
+
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(blockColor(for: index))
+                    .frame(width: 26, height: 26)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(
+                                index < timerManager.completedBlocks
+                                    ? (isExtra ? Color.purple.opacity(0.5) : Color.green.opacity(0.5))
+                                    : Color.gray.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(
+                        color: index < timerManager.completedBlocks
+                            ? (isExtra ? Color.purple.opacity(0.3) : Color.green.opacity(0.3))
+                            : Color.clear,
+                        radius: 2, x: 0, y: 1
+                    )
+
+                if index < timerManager.completedBlocks {
+                    Image(systemName: isExtra ? "bolt.fill" : "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .onHover { isHovered in
+            hoveredBlockIndex = isHovered ? index : nil
+        }
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             // Progress visualization
@@ -66,69 +129,27 @@ struct ContentView: View {
             ZStack(alignment: .bottom) {
                 VStack(spacing: 8) {
                     let totalBlocksToShow = max(timerManager.maxBlocks, timerManager.completedBlocks + (timerManager.isRunning ? 1 : 0))
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    let normalCount = min(timerManager.maxBlocks, totalBlocksToShow)
+
+                    // Standardní bloky
+                    HStack(spacing: 6) {
+                        ForEach(0..<normalCount, id: \.self) { index in
+                            blockView(index: index)
+                        }
+                    }
+
+                    // Extra bloky na samostatném řádku
+                    if totalBlocksToShow > timerManager.maxBlocks {
                         HStack(spacing: 6) {
-                            ForEach(0..<totalBlocksToShow, id: \.self) { index in
-                                let isExtra = index >= timerManager.maxBlocks
-                                ZStack {
-                                    if index == timerManager.completedBlocks && timerManager.isRunning {
-                                        // Active block - focus indicator
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [Color.orange, Color.orange.opacity(0.8)],
-                                                    startPoint: .top,
-                                                    endPoint: .bottom
-                                                )
-                                            )
-                                            .frame(width: 26, height: 26)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .stroke(Color.orange.opacity(0.6), lineWidth: 2)
-                                            )
-                                            .shadow(color: Color.orange.opacity(0.5), radius: 4, x: 0, y: 2)
-
-                                        Image(systemName: "flame.fill")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.white)
-                                    } else {
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(blockColor(for: index))
-                                            .frame(width: 26, height: 26)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .stroke(
-                                                        index < timerManager.completedBlocks
-                                                            ? (isExtra ? Color.purple.opacity(0.5) : Color.green.opacity(0.5))
-                                                            : Color.gray.opacity(0.3),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                            .shadow(
-                                                color: index < timerManager.completedBlocks
-                                                    ? (isExtra ? Color.purple.opacity(0.3) : Color.green.opacity(0.3))
-                                                    : Color.clear,
-                                                radius: 2, x: 0, y: 1
-                                            )
-
-                                        if index < timerManager.completedBlocks {
-                                            Image(systemName: isExtra ? "bolt.fill" : "checkmark")
-                                                .font(.system(size: 12, weight: .bold))
-                                                .foregroundColor(.white)
-                                        }
-                                    }
-                                }
-                                .onHover { isHovered in
-                                    hoveredBlockIndex = isHovered ? index : nil
-                                }
+                            ForEach(timerManager.maxBlocks..<totalBlocksToShow, id: \.self) { index in
+                                blockView(index: index)
                             }
                         }
-                        .padding(.horizontal, 2)
                     }
-                    .frame(width: 300)
 
                     Spacer().frame(height: 16)
                 }
+                .frame(maxWidth: .infinity)
 
                 if hoveredBlockIndex != nil {
                     Text(blockTooltip(for: hoveredBlockIndex!))
@@ -136,7 +157,7 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .frame(width: 300, height: 50)
+            .frame(width: 300)
             
             
             // Timer display
@@ -261,9 +282,6 @@ struct ContentView: View {
             // Controls
             if !timerManager.isRunning && !timerManager.isOnBreak {
                 let isOvertime = timerManager.completedBlocks >= timerManager.maxBlocks
-                Spacer()
-                    .frame(height: 16)
-
                 Button(action: {
                     timerManager.startBlock()
                     onUpdate()
@@ -271,21 +289,20 @@ struct ContentView: View {
                         onClosePopover?()
                     }
                 }) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Image(systemName: isOvertime ? "bolt.fill" : "play.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                        VStack(spacing: 2) {
-                            Text(isOvertime ? "Extra blok" : "Start")
-                                .font(.system(size: 16, weight: .semibold))
-                            if isOvertime {
-                                Text("pauza 2x delší")
-                                    .font(.system(size: 10))
-                                    .opacity(0.85)
-                            }
+                            .font(.system(size: 15, weight: .semibold))
+                        Text(isOvertime ? "Extra blok" : "Start")
+                            .font(.system(size: 15, weight: .semibold))
+                        if isOvertime {
+                            Text("(pauza 2x delší)")
+                                .font(.system(size: 10))
+                                .opacity(0.85)
                         }
                     }
                     .foregroundColor(.white)
-                    .frame(minWidth: 120, minHeight: 44)
+                    .frame(minWidth: 120, minHeight: 36)
+                    .padding(.horizontal, 12)
                     .background(
                         LinearGradient(
                             colors: isOvertime
@@ -302,9 +319,6 @@ struct ContentView: View {
                     )
                 }
                 .buttonStyle(.plain)
-
-                Spacer()
-                    .frame(height: 16)
             }
 
             // Settings
@@ -382,6 +396,14 @@ struct ContentView: View {
                             .font(.caption)
                         TextField("", text: breakInstructionText)
                             .textFieldStyle(.roundedBorder)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Text na zámku po dokončení všech bloků:")
+                            .font(.caption)
+                        TextField("", text: completionMessageText, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(2...5)
                     }
 
                     Divider()

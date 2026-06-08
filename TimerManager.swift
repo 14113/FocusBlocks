@@ -21,6 +21,7 @@ class TimerManager: ObservableObject {
     @Published var reminderMinutes: Int = 15
     @Published var maxBlocks: Int = 10
     @Published var breakInstruction: String = "Jeden nádech do břicha, zavři oči"
+    @Published var completionMessage: String = "Cítím, jak chceš, abych makal dál. Vím, že se bojíš. Postarám se o nás jinak."
 
     var blockDuration: TimeInterval {
         TimeInterval(focusDurationMinutes * 60)
@@ -251,6 +252,12 @@ class TimerManager: ObservableObject {
             breakInstruction = "Jeden nádech do břicha, zavři oči"
         }
 
+        if let savedMessage = defaults.string(forKey: "completionMessage"), !savedMessage.isEmpty {
+            completionMessage = savedMessage
+        } else {
+            completionMessage = "Cítím, jak chceš, abych makal dál. Vím, že se bojíš. Postarám se o nás jinak."
+        }
+
         if defaults.object(forKey: "openRescueTimeOnComplete") != nil {
             openRescueTimeOnComplete = defaults.bool(forKey: "openRescueTimeOnComplete")
         } else {
@@ -292,6 +299,12 @@ class TimerManager: ObservableObject {
     func saveBreakInstruction(_ text: String) {
         breakInstruction = text
         defaults.set(text, forKey: "breakInstruction")
+        SyncManager.shared.syncNow()
+    }
+
+    func saveCompletionMessage(_ text: String) {
+        completionMessage = text
+        defaults.set(text, forKey: "completionMessage")
         SyncManager.shared.syncNow()
     }
     
