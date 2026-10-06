@@ -605,13 +605,23 @@ class TimerManager: ObservableObject {
         event.title = "Focus Block \(blockNumber)"
         event.startDate = start
         event.endDate = end
-        event.calendar = eventStore.defaultCalendarForNewEvents
+        event.calendar = targetCalendar()
 
         do {
             try eventStore.save(event, span: .thisEvent)
         } catch {
             print("Failed to save calendar event: \(error)")
         }
+    }
+
+    /// Always insert Focus Block events into the "Úkoly" calendar.
+    /// Falls back to the default calendar if it can't be found.
+    private func targetCalendar() -> EKCalendar? {
+        let named = eventStore.calendars(for: .event).first { $0.title == "Úkoly" }
+        if named == nil {
+            print("Calendar: \"Úkoly\" not found, falling back to default")
+        }
+        return named ?? eventStore.defaultCalendarForNewEvents
     }
 
     // MARK: - Midnight Reset
